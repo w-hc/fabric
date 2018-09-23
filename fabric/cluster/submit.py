@@ -12,8 +12,12 @@ clean = Template('rm ${dir_name}/checkpoint/*.ckpt')
 
 list_job_info = Template('squeue -n $name')
 
-submit_cmd = Template('sbatch -d singleton --signal=B:SIGINT@60 --time=04:00:00 --nodes=1 -p $partition \
--c${num_cores} $feature --job-name=$name  --output="$log" "$script" ')
+submit_cmd = Template(
+    'sbatch '
+    '-d singleton --time=04:00:00 '
+    '--nodes=1 -p $partition -c${num_cores} $feature '
+    '--job-name=$name  --output="$log" "$script" '
+)
 
 
 def temp_sh_exec(command_closure, sh_content, num_runs, dummy=True):
@@ -48,22 +52,29 @@ def task_execute(task_dir, action, length, dummy, partition, num_cores, features
         if not path.isfile(run_script):
             raise ValueError("{} is not a valid file".format(run_script))
 
-        sh_content = b'#!/usr/bin/env bash\n' + str.encode('python "{}"\n'.format(run_script))
+        sh_content = b'#!/usr/bin/env bash\n'\
+            + str.encode('python "{}"\n'.format(run_script))
+            # + str.encode('CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES srun python "{}"\n'.format(run_script))
         cmd_closure = lambda sbatch_file_name:\
-                      submit_cmd.substitute(partition=partition, num_cores=num_cores,
-                                            feature=features, name=task_name,
-                                            log=slurm_out, script=sbatch_file_name)
+            submit_cmd.substitute(
+                partition=partition, num_cores=num_cores,
+                feature=features, name=task_name,
+                log=slurm_out, script=sbatch_file_name
+            )
         temp_sh_exec(cmd_closure, sh_content, num_runs, dummy)
 
     elif action == 'eval':
         if not path.isfile(eval_notebook):
             raise ValueError("{} is not a valid notebook".format(eval_notebook))
         cmd_closure = lambda sbatch_file_name:\
-                      submit_cmd.substitute(partition=partition, num_cores=num_cores,
-                                            feature=features, name=task_name,
-                                            log=slurm_out, script=sbatch_file_name)
+            submit_cmd.substitute(
+                partition=partition, num_cores=num_cores,
+                feature=features, name=task_name,
+                log=slurm_out, script=sbatch_file_name
+            )
         sh_content = b'#!/usr/bin/env bash\n' + str.encode(
-            'jupyter nbconvert --ExecutePreprocessor.timeout=-1 --to notebook --execute {nb} --output {nb}'
+            'jupyter nbconvert --ExecutePreprocessor.timeout=-1 '
+            '--to notebook --execute {nb} --output {nb}'
             .format(nb=eval_notebook)
         )
         temp_sh_exec(cmd_closure, sh_content, num_runs, dummy)
@@ -76,26 +87,31 @@ def task_execute(task_dir, action, length, dummy, partition, num_cores, features
             subprocess.run(to_exec, shell=True)
 
 
-
-
 def main():
     allowed_actions = ('run', 'cancel', 'eval')
     default_partition = 'greg-gpu'
     parser = argparse.ArgumentParser(description='TTIC slurm sbatch submit')
-    parser.add_argument('-f', '--file', type=str, required=True,
-                        help='a yaml containing a list of absolute paths to the job folders')
-    parser.add_argument('-p', '--partition', default=default_partition, type=str,
-                        help='the partition the job is submitted to. default {}'.format(default_partition))
-    parser.add_argument('-a', '--action', default='run',
-                        help='one of {}, default {}'.format(allowed_actions, allowed_actions[0]))
-    parser.add_argument('-n', '--num-cores', type=int, default=1,
-                        help='Number of cores to run the job. Overruled if job has a spec')
-    parser.add_argument('-l', '--length', type=int, default=1,
-                        help='the length of a series. Not fully implemented. See doc')
-    parser.add_argument('-C', '--feature-constraints', type=str, default='',
-                        help='required features, such as highmem or titanx')
-    parser.add_argument('-d', '--dummy', default=False, action='store_true',
-                        help='in dummy mode the slurm command is printed but not executed')
+    parser.add_argument(
+        '-f', '--file', type=str, required=True,
+        help='a yaml containing a list of absolute paths to the job folders')
+    parser.add_argument(
+        '-p', '--partition', default=default_partition, type=str,
+        help='the partition the job is submitted to. default {}'.format(default_partition))
+    parser.add_argument(
+        '-a', '--action', default='run',
+        help='one of {}, default {}'.format(allowed_actions, allowed_actions[0]))
+    parser.add_argument(
+        '-n', '--num-cores', type=int, default=1,
+        help='Number of cores to run the job. Overruled if job has a spec')
+    parser.add_argument(
+        '-l', '--length', type=int, default=1,
+        help='the length of a series. Not fully implemented. See doc')
+    parser.add_argument(
+        '-C', '--feature-constraints', type=str, default='',
+        help='required features, such as highmem or titanx')
+    parser.add_argument(
+        '-d', '--dummy', default=False, action='store_true',
+        help='in dummy mode the slurm command is printed but not executed')
     args = parser.parse_args()
 
     file_name = args.file
@@ -109,7 +125,8 @@ def main():
     if dummy:
         print("Under dummy mode")
     if action not in allowed_actions:
-        raise ValueError("action must be one of {}, but given: {}".format(allowed_actions, action))
+        raise ValueError(
+            "action must be one of {}, but given: {}".format(allowed_actions, action))
 
     with open(file_name) as f:
         task_dir_list = yaml.load(f)
@@ -117,4 +134,5 @@ def main():
         if not path.isdir(task_dir):
             raise ValueError("{} is not a valid directory".format(task_dir))
         else:
-            task_execute(task_dir, action, length, dummy, partition, num_cores, features)
+            task_execute(
+                task_dir, action, length, dummy, partition, num_cores, features)
