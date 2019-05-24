@@ -40,10 +40,13 @@ class SaveManager():
             time_str, iter_inx = no_suffix.split('iter')
             pairs.append( (time_str, int(iter_inx)) )
         args_sorted = native_argsort(pairs)
-        return [valid_files[i] for i in args_sorted], pairs
+        return (
+            [valid_files[i] for i in args_sorted],
+            [pairs[i]       for i in args_sorted]
+        )
 
     def _get_newest_file(self):
-        file_names, pairs = self._list_root_dir()
+        file_names, _ = self._list_root_dir()
         if len(file_names) == 0:
             return None
         else:

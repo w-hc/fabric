@@ -14,7 +14,7 @@ list_job_info = Template('squeue -n $name')
 
 submit_cmd = Template(
     'sbatch '
-    '-d singleton --time=04:00:00 '
+    '-d singleton '
     '--nodes=1 -p $partition -c${num_cores} $feature '
     '--job-name=$name  --output="$log" "$script" '
 )
@@ -35,7 +35,12 @@ def temp_sh_exec(command_closure, sh_content, num_runs, dummy=True):
 
 
 def task_execute(task_dir, action, length, dummy, partition, num_cores, features):
-    task_name = ''.join( task_dir.split('/')[-2:])  # take both group name and index
+    path_split = task_dir.split('/')
+    # .../cityscapes/runs/001  skip runs
+    task_name = ''.join([path_split[-3], path_split[-1]])
+    # task_name = ''.join( task_dir.split('/')[-2:])  # take both group name and index
+
+    task_name
     slurm_out = path.join(task_dir, 'slurm.out')
     run_script = path.join(task_dir, 'run.py')
     eval_notebook = path.join(task_dir, 'eval.ipynb')

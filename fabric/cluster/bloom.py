@@ -131,7 +131,8 @@ def main():
     parser.add_argument('-r', '--rank', type=str,
                         help='The option ranking guidance file')
     parser.add_argument('-t', '--target', type=str,
-                        help='relative osp to the target directory at which one wants to bloom the symbolic links')
+                        help='relative osp to the target directory at which one '
+                             'wants to bloom the symbolic links')
     parser.add_argument('-w', '--what', type=str, default='.',
                         help='what to link from exp dir. One of {}'.format(linkable))
     args = parser.parse_args()

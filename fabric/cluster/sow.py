@@ -116,24 +116,29 @@ def main():
 
     # go into runs/exp_group_name/
     os.chdir(launch_dir_abs_path)
+    if not osp.isdir( './runs' ):
+        os.mkdir('./runs')
+        print("making run directory inside launch")
+    os.chdir('./runs')
 
     # This is bad code and confusing. You will forget quickly
-    if not osp.isdir( '../../runs' ):
-        os.mkdir('../../runs')
-        print("making run directory beside launch")
-    os.chdir('../../runs')
+    # if not osp.isdir( '../../runs' ):
+    #     os.mkdir('../../runs')
+    #     print("making run directory beside launch")
+    # os.chdir('../../runs')
 
-    if osp.isdir(configDict['group']):
-        print('within runs, dir: {} already exists'.format(configDict['group']))
-    else:
-        os.mkdir(configDict['group'])
-        print('within runs, make dir: {}'.format(configDict['group']))
-    os.chdir(configDict['group'])
+    # if osp.isdir(configDict['group']):
+    #     print('within runs, dir: {} already exists'.format(configDict['group']))
+    # else:
+    #     os.mkdir(configDict['group'])
+    #     print('within runs, make dir: {}'.format(configDict['group']))
+    # os.chdir(configDict['group'])
 
     base_config = configDict['base']
     particular_options_list = configDict['particular']
-    default_keys = nested_dict_locate_field(base_config,
-                                            lambda x: isinstance(x, Mapping) and 'default' in x)
+    default_keys = nested_dict_locate_field(
+        base_config, lambda x: isinstance(x, Mapping) and 'default' in x
+    )
 
     touched_dirs_acc = []
     for parti_opt in particular_options_list:
