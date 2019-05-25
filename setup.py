@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ttic_fabric',
-    version='0.1.1',
+    version='0.2.0',
     author='Haochen Wang',
     author_email='whc@uchicago.edu',
     packages=find_packages(),
@@ -23,7 +23,6 @@ setup(
         'console_scripts': [
             'smit=fabric.cluster.submit:main',
             'sow=fabric.cluster.sow:main',
-            'bloom=fabric.cluster.bloom:main'
         ]
     },
     zip_safe=False  # accessing config files without using pkg_resources.
