@@ -34,15 +34,20 @@ def main():
         help='a yaml based on our convention describing the experiments to run'
     )
     parser.add_argument(
+        '-d', '--dir', type=str, default='runs',
+        help='the directory in which to plant configs'
+    )
+    parser.add_argument(
         '-m', '--mock', nargs='*', type=str, required=False,
         help='specify a list of configs to be printed in full details'
     )
     args = parser.parse_args()
 
-    launch_fname = args.file
-    launch_dir_path = osp.dirname( osp.abspath(launch_fname) )
+    LAUNCH_FNAME = args.file
+    LAUNCH_DIR_ABSPATH = osp.dirname(osp.abspath(LAUNCH_FNAME))
+    RUN_DIR_NAME = args.dir
 
-    with open(launch_fname, 'r') as f:
+    with open(LAUNCH_FNAME, 'r') as f:
         launch_config = yaml.safe_load(f)
     group_name, cfg_name_2_maker = parse_launch_config(launch_config)
 
@@ -54,18 +59,19 @@ def main():
             print(yaml.dump(maker.state, default_flow_style=False))
         return
 
-    dir_name = launch_dir_path.split('/')[-1]
+    # check that group namd and launch dir name match
+    dir_name = LAUNCH_DIR_ABSPATH.split('/')[-1]
     assert dir_name == group_name, \
         "group name: {}, but launch dir name: {}. Match them"\
         .format(group_name, dir_name)
     del dir_name
 
-    # go into runs/exp_group_name/
-    os.chdir(launch_dir_path)
-    if not osp.isdir( './runs' ):
-        os.mkdir('./runs')
-        print("making run directory inside launch")
-    os.chdir('./runs')
+    # create runs folder and plant experiments
+    os.chdir(LAUNCH_DIR_ABSPATH)
+    if not osp.isdir(RUN_DIR_NAME):
+        os.mkdir(RUN_DIR_NAME)
+        print("making {} inside launch".format(RUN_DIR_NAME))
+    os.chdir(RUN_DIR_NAME)
 
     for exp_name, maker in cfg_name_2_maker.items():
         if not osp.isdir(exp_name):
@@ -75,7 +81,7 @@ def main():
             }
             os.mkdir(exp_name)
             cprint("planting {}".format(exp_name), color='blue')
-            plant_files(launch_dir_path, exp_name, maker.state)
+            plant_files(LAUNCH_DIR_ABSPATH, exp_name, maker.state)
         else:
             print("duplicate {} found. skipping".format(exp_name))
 
