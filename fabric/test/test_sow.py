@@ -63,7 +63,7 @@ def parse_yml_str(x):
 def test_dummy():
     # set_trace()
     cfg = parse_yml_str(a1)
-    acc = parse_launch_config(cfg)
+    gname, acc = parse_launch_config(cfg)
     for name, maker in acc.items():
         print(name)
         print(maker.state)
@@ -114,3 +114,72 @@ def test_cmd_parsing():
         elif isinstance(expected, str):  # match for exceptions
             with pytest.raises(AssertionError, match=expected):
                 ConfigMaker.parse_clause_cmd(input)
+
+
+sample1 = """
+a:
+    b: 3
+"""
+
+
+def test_cfg_parsing1():
+    cfg = yaml.safe_load(sample1)
+    primary = ConfigMaker(cfg)
+
+    pairs = [
+        ( {'': {'m': 2}}, {'m': 2} ),
+        ( {'a.b': 2}, {'a': {'b': 2}} ),
+        ( {'a add c': 2}, {'a': {'b': 3, 'c': 2}} ),
+        ( {'a add ': {'c': 2}}, {'a': {'b': 3, 'c': 2}} ),
+        ( ' del a', {} ),
+        ( ' del', {'a': {'b': 3}} )
+    ]
+
+    for i, (clause, expected) in enumerate(pairs):
+        maker = primary.clone()
+        if not isinstance(expected, str):
+            maker.execute_clause(clause)
+            assert maker.state == expected, 'err at clause {}'.format(i)
+        else:
+            try:
+                with pytest.raises(AssertionError, match=expected):
+                    maker.execute_clause(clause)
+            except:
+                with pytest.raises(ValueError, match=expected):
+                    maker.execute_clause(clause)
+
+
+sample2 = """
+- a: 1
+- b:
+    c: 2
+"""
+
+
+def test_cfg_parsing2():
+    cfg = yaml.safe_load(sample2)
+    primary = ConfigMaker(cfg)
+    pairs = [
+        ( {'': {'m': 2}}, {'m': 2} ),
+        ( {'0': 9}, [9, {'b': {'c': 2}}] ),
+        ( {'0.a': 7}, [{'a': 7}, {'b': {'c': 2}}] ),
+        ( {'1.b.c': 7}, [{'a': 1}, {'b': {'c': 7}}] ),
+        ( 'del 1', [{'a': 1}, ] ),
+        ( 'del -1', [{'a': 1}, ] ),
+        ( {'1.b.c add': 3}, 'not a dict' ),
+        ( {'1.b.c add 2': 3}, 'not a container' ),
+        ( {'1.b.c add 2 3 4': 3}, '1 obj everytime' ),
+    ]
+
+    for i, (clause, expected) in enumerate(pairs):
+        maker = primary.clone()
+        if not isinstance(expected, str):
+            maker.execute_clause(clause)
+            assert maker.state == expected, 'err at clause {}'.format(i)
+        else:
+            try:
+                with pytest.raises(AssertionError, match=expected):
+                    maker.execute_clause(clause)
+            except:
+                with pytest.raises(ValueError, match=expected):
+                    maker.execute_clause(clause)
