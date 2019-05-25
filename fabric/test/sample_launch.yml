@@ -1,0 +1,23 @@
+group: test_fabric
+base:
+    train:
+        epochs: 40
+        lr: 0.1
+        fun: 1
+base_modify:
+  - train.epochs: 50
+  - train.lr: 0.2
+
+particular:
+  - name: exp1
+    modify:
+      - train.epochs: 70
+      - add test:
+          aug: 1
+          parallel: 2
+      - train del epochs
+    expand:
+      - alias: [slow, medium, fast]
+        train.lr: [0.5, 0.6, 0.7]
+      - alias: [lazy, hard]
+        train.fun: [2, 3]
