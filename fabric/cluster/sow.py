@@ -15,7 +15,7 @@ _META_FIELD_NAME = '__meta__'
 
 _LAUNCH_FIELDS_SPEC = {
     'required': ['group', 'particular'],
-    'optional': ['base_modify'],
+    'optional': ['base_modify', 'desc'],
     'either': ['import_base', 'base']  # one of the field must be present
 }
 
