@@ -42,6 +42,10 @@ def main():
         help='a yml containing a list of abspaths to touched exps'
     )
     parser.add_argument(
+        '--overwrite', action='store_true',
+        help='in case of duplicate exp names, overwrite their options'
+    )
+    parser.add_argument(
         '-m', '--mock', nargs='*', type=str, required=False,
         help='specify a list of configs to be printed in full details'
     )
@@ -85,17 +89,15 @@ def main():
 
     sow_acc = []
     for i, (exp_name, maker) in enumerate(cfg_name_2_maker.items()):
-        if not osp.isdir(exp_name):
-            maker.state[_META_FIELD_NAME] = {
-                'group': group_name,
-                'name': exp_name
-            }
-            os.mkdir(exp_name)
-            cprint("sowing {}: {}".format(i, exp_name), color='blue')
-            plant_files(LAUNCH_DIR_ABSPATH, exp_name, maker.state)
+        maker.state[_META_FIELD_NAME] = {
+            'group': group_name,
+            'name': exp_name
+        }
+        cprint("sowing {}: {}".format(i, exp_name), color='blue')
+        success = plant_files(
+            LAUNCH_DIR_ABSPATH, exp_name, maker.state, overwrite=args.overwrite)
+        if success:
             sow_acc.append(osp.abspath(exp_name))
-        else:
-            print("duplicate {} found. skipping".format(exp_name))
 
     # 3. save a log file for other utils to use
     with open(SOW_LOG_FNAME, 'w') as f:
@@ -393,26 +395,45 @@ class NodeTracer():
             del self.pointed[field]
 
 
-def plant_files(launch_dir, dir_name, cfg_node):
+def plant_files(launch_dir, exp_name, cfg_node, overwrite):
     '''plant the config and related files (run.py)
     Args:
         launch_dir: abspath! of launch directory from which run.py is copied
-        dir_name: the bare name of experiment folder in which things are dumped
+        exp_name: the bare name of experiment folder in which things are dumped
     '''
-    with open(osp.join(dir_name, 'config.yml'), 'w') as f:
+    cfg_fname = osp.join(exp_name, 'config.yml')
+    if osp.isdir(exp_name):  # duplicate exists
+        # 1. compare whether the options are identical
+        with open(cfg_fname, 'r') as f:
+            old_cfg = yaml.safe_load(f)
+        if old_cfg == cfg_node:
+            print("identical dup discovered", end='; ')
+        else:
+            cprint("dup {} differs".format(exp_name), color='red', end='; ')
+        if overwrite:
+            print("overwriting")
+            pass
+        else:
+            print("skipping")
+            return False
+    else:
+        os.mkdir(exp_name)
+
+    with open(cfg_fname, 'w') as f:
         yaml.dump(cfg_node, f, default_flow_style=False)
     to_link_over = ('run.py',)
     for item in to_link_over:
         if osp.isfile(osp.join(launch_dir, item)):
-            # shutil.copy(osp.join(launch_dir, item), dir_name)
+            # shutil.copy(osp.join(launch_dir, item), exp_name)
             src = osp.join(launch_dir, item)
-            target = osp.join(dir_name, item)
+            target = osp.join(exp_name, item)
             if osp.islink(target):
                 os.unlink(target)
             elif osp.isfile(target):
                 os.remove(target)
             # note that we use relative path for maintainability.
-            os.symlink(osp.relpath(src, osp.abspath(dir_name)), target)
+            os.symlink(osp.relpath(src, osp.abspath(exp_name)), target)
+    return True
 
 
 if __name__ == '__main__':
