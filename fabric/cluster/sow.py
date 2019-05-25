@@ -27,119 +27,148 @@ for _field_spec in (_LAUNCH_FIELDS_SPEC, _PARTICULAR_FIELDS_SPEC):
         + _field_spec['either']
 
 
-def plant_files(launch_dir, dir_name, config_dict):
-    '''
-    plant the config and related files (run.py eval.ipynb) into the specified directory
-    If these files already exist, compare edit timestamp and only copy if outdated.
-    For simplicity, this bahavior is not implemented. Just copy
-    '''
-    with open(osp.join(dir_name, 'config.yml'), 'w') as f:
-        yaml.dump(config_dict, f, default_flow_style=False)
-    if osp.isfile( osp.join(launch_dir, 'run.py') ):
-        # shutil.copy(osp.join(launch_dir, 'run.py'), dir_name)
-        src = osp.join(launch_dir, 'run.py')
-        target = osp.join(dir_name, 'run.py')
-        if osp.islink(target):
-            os.unlink(target)
-        elif osp.isfile(target):
-            os.remove(target)
-        # note that use relative path for maintainability.
-        # also it is dirname that is needed
-        os.symlink(osp.relpath(src, osp.abspath(dir_name)), target)
+def main():
+    parser = argparse.ArgumentParser(description='deploy the experiments')
+    parser.add_argument(
+        '-f', '--file', type=str, required=True,
+        help='a yaml based on our convention describing the experiments to run'
+    )
+    parser.add_argument(
+        '-m', '--mock', nargs='*', type=str, required=False,
+        help='specify a list of configs to be printed in full details'
+    )
+    args = parser.parse_args()
+
+    launch_fname = args.file
+    launch_dir_path = osp.dirname( osp.abspath(launch_fname) )
+
+    with open(launch_fname, 'r') as f:
+        launch_config = yaml.safe_load(f)
+    group_name, cfg_name_2_maker = parse_launch_config(launch_config)
+
+    if args.mock is not None:
+        to_display = args.mock if len(args.mock) > 0 else cfg_name_2_maker.keys()
+        for exp_name in to_display:
+            maker = cfg_name_2_maker[exp_name]
+            cprint(exp_name, color='blue')
+            print(maker.state)
+        return
+
+    dir_name = launch_dir_path.split('/')[-1]
+    assert dir_name == group_name, \
+        "group name: {}, but launch dir name: {}. Match them"\
+        .format(group_name, dir_name)
+    del dir_name
+
+    # go into runs/exp_group_name/
+    os.chdir(launch_dir_path)
+    if not osp.isdir( './runs' ):
+        os.mkdir('./runs')
+        print("making run directory inside launch")
+    os.chdir('./runs')
+
+    for exp_name, maker in cfg_name_2_maker.items():
+        if not osp.isdir(exp_name):
+            maker.state[_META_FIELD_NAME] = {
+                'group': group_name,
+                'name': exp_name
+            }
+            os.mkdir(exp_name)
+            cprint("planting {}".format(exp_name), color='blue')
+            plant_files(launch_dir_path, exp_name, maker.state)
+        else:
+            print("duplicate {} found. skipping".format(exp_name))
 
 
-class NodeTracer():
-    def __init__(self, src_node):
-        """
-        A src node can be either a list or dict
-        """
-        assert isinstance(src_node, (list, dict))
+def parse_launch_config(launch_config):
+    validate_dict_fields(launch_config, _LAUNCH_FIELDS_SPEC)
+    acc = {}
+    # WARNING assume for now that base is filled. No import yet
+    group_name = launch_config['group']
+    base_maker = ConfigMaker(launch_config['base'])
 
-        # these are movable pointers
-        self.child_token = "_"  # init token can be anything
-        self.parent = {self.child_token: src_node}
+    # execute base modifications
+    if 'base_modify' in launch_config:
+        clauses = launch_config['base_modify']
+        for _clau in clauses:
+            base_maker.execute_clause(_clau)
 
-        # these are permanent pointers at the root
-        self.root_child_token = self.child_token
-        self.root = self.parent
+    # execute particular configs
+    for part in launch_config['particular']:
+        validate_dict_fields(part, _PARTICULAR_FIELDS_SPEC)
+        curr_maker = base_maker.clone()
+        part_name = part['name']
+        # exec modifications
+        if 'modify' in part:
+            clauses = part['modify']
+            for _clau in clauses:
+                curr_maker.execute_clause(_clau)
+        # expand the field
+        if 'expand' in part:
+            assert isinstance(part['expand'], list)
+            dfs_expand(
+                level=0, name='{}_'.format(part_name),
+                maker=curr_maker.clone(), deposit=acc, grids=part['expand']
+            )
+        else:
+            acc[part_name] = curr_maker
 
-    @property
-    def state(self):
-        return self.root[self.root_child_token]
+    return group_name, acc
 
-    @property
-    def pointed(self):
-        return self.parent[self.child_token]
 
-    def advance_pointer(self, path):
-        if len(path) == 0:
-            return
-        path_list = list(
-            map(lambda x: int(x) if str.isdigit(x) else x, path.split('.'))
+def validate_dict_fields(src_dict, field_spec):
+    assert isinstance(src_dict, dict)
+    # check required fields are present
+    for k in field_spec['required']:
+        assert k in src_dict and src_dict[k], \
+            "field '{}' is required and must be truthy. Given {}".format(
+                k, src_dict.keys()
         )
+    # check 'or' fields are present
+    present = False or len(field_spec['either']) == 0
+    for k in field_spec['either']:
+        if k in src_dict and src_dict[k]:
+            present = True
+    if not present:
+        raise ValueError(
+            "one of {} is required and must be truthy. Given {}".format(
+                field_spec['either'], src_dict.keys()
+            )
+        )
+    # check no extra fields present
+    for k in src_dict.keys():
+        if k not in field_spec['all']:
+            raise ValueError("field '{}' is not allowed among {}".format(
+                k, field_spec['all']
+            ))
 
-        for i, token in enumerate(path_list):
-            self.parent = self.pointed
-            self.child_token = token
-            try:
-                self.pointed
-            except (IndexError, KeyError):
-                raise ValueError(
-                    "During the tracing of {}, {}-th token '{}'"
-                    " is not present in node {}".format(
-                        path, i, self.child_token, self.state
-                    )
-                )
 
-    def add(self, objs, arg):
-        assert len(objs) <= 1, 'add deals with 1 obj everytime: {}'.format(objs)
-        if len(objs) == 1:
-            field = objs[0]
-            if isinstance(self.pointed, list):
-                assert str.isdigit(field)
-                field = int(field)
-                self.pointed.insert(field, arg)
-            elif isinstance(self.pointed, dict):
-                assert field not in self.pointed, 'field {} present in {}'\
-                    .format(field, self.pointed)
-                self.pointed[field] = arg
-            else:
-                raise ValueError("{} is not a container node".format(self.pointed))
-        else:
-            assert isinstance(self.pointed, dict),\
-                '{} is not a dict, cannot use bare add'.format(self.pointed)
-            assert isinstance(arg, dict), 'expect dict when adding into dict'
-            for k in arg.keys():
-                assert k not in self.pointed, \
-                    '{} already present in {}'.format(k, self.pointed)
-            self.pointed.update(arg)
+def dfs_expand(level, name, maker, deposit, grids):
+    if level == len(grids):
+        name = name[:-1]  # throw away the '_' at the end of say 'lr_lo_'
+        deposit[name] = maker.clone()
+        return
 
-    def replace(self, objs, arg):
-        assert len(objs) <= 1, 'replace deals with 1 obj everytime: {}'.format(objs)
-        if len(objs) == 1:
-            field = objs[0]
-            if isinstance(self.pointed, list):
-                assert str.isdigit(field)
-                field = int(field)
-                self.pointed[field] = arg
-            elif isinstance(self.pointed, dict):
-                assert field in self.pointed, 'field {} not present in {}'\
-                    .format(field, self.pointed)
-                self.pointed[field] = arg
-            else:
-                raise ValueError("{} is not a container node".format(self.pointed))
-        else:
-            self.parent[self.child_token] = arg
+    tier = grids[level]
+    iter_clauses = list(tier.keys())
+    size = len(tier[iter_clauses[0]])
+    for clause in iter_clauses:
+        assert len(tier[clause]) == size
 
-    def delete(self, objs):
-        if isinstance(self.pointed, list):
-            objs = map(lambda x: int(x), objs)
-        elif isinstance(self.pointed, dict):
-            pass
-        else:
-            raise ValueError("{} is not a container node".format(self.pointed))
-        for field in objs:
-            del self.pointed[field]
+    if 'alias' in tier:
+        alias = tier['alias']
+        iter_clauses.remove('alias')
+    else:
+        alias = range(size)
+
+    for nick_name, inx in zip(alias, range(size)):
+        nick_name = '{}{}_'.format(name, nick_name)
+        curr_maker = maker.clone()
+        for clause in iter_clauses:
+            arg = tier[clause][inx]
+            clause = {clause: arg}
+            curr_maker.execute_clause(clause)
+        dfs_expand(level + 1, nick_name, curr_maker, deposit, grids)
 
 
 class ConfigMaker():
@@ -243,148 +272,118 @@ class ConfigMaker():
     #     pass
 
 
-def validate_dict_fields(src_dict, field_spec):
-    assert isinstance(src_dict, dict)
-    # check required fields are present
-    for k in field_spec['required']:
-        assert k in src_dict and src_dict[k], \
-            "field '{}' is required and must be truthy. Given {}".format(
-                k, src_dict.keys()
+class NodeTracer():
+    def __init__(self, src_node):
+        """
+        A src node can be either a list or dict
+        """
+        assert isinstance(src_node, (list, dict))
+
+        # these are movable pointers
+        self.child_token = "_"  # init token can be anything
+        self.parent = {self.child_token: src_node}
+
+        # these are permanent pointers at the root
+        self.root_child_token = self.child_token
+        self.root = self.parent
+
+    @property
+    def state(self):
+        return self.root[self.root_child_token]
+
+    @property
+    def pointed(self):
+        return self.parent[self.child_token]
+
+    def advance_pointer(self, path):
+        if len(path) == 0:
+            return
+        path_list = list(
+            map(lambda x: int(x) if str.isdigit(x) else x, path.split('.'))
         )
-    # check 'or' fields are present
-    present = False or len(field_spec['either']) == 0
-    for k in field_spec['either']:
-        if k in src_dict and src_dict[k]:
-            present = True
-    if not present:
-        raise ValueError(
-            "one of {} is required and must be truthy. Given {}".format(
-                field_spec['either'], src_dict.keys()
-            )
-        )
-    # check no extra fields present
-    for k in src_dict.keys():
-        if k not in field_spec['all']:
-            raise ValueError("field '{}' is not allowed among {}".format(
-                k, field_spec['all']
-            ))
 
+        for i, token in enumerate(path_list):
+            self.parent = self.pointed
+            self.child_token = token
+            try:
+                self.pointed
+            except (IndexError, KeyError):
+                raise ValueError(
+                    "During the tracing of {}, {}-th token '{}'"
+                    " is not present in node {}".format(
+                        path, i, self.child_token, self.state
+                    )
+                )
 
-def dfs_expand(level, name, maker, deposit, grids):
-    if level == len(grids):
-        name = name[:-1]  # throw away the '_' at the end of say 'lr_lo_'
-        deposit[name] = maker.clone()
-        return
-
-    tier = grids[level]
-    iter_clauses = list(tier.keys())
-    size = len(tier[iter_clauses[0]])
-    for clause in iter_clauses:
-        assert len(tier[clause]) == size
-
-    if 'alias' in tier:
-        alias = tier['alias']
-        iter_clauses.remove('alias')
-    else:
-        alias = range(size)
-
-    for nick_name, inx in zip(alias, range(size)):
-        nick_name = '{}{}_'.format(name, nick_name)
-        curr_maker = maker.clone()
-        for clause in iter_clauses:
-            arg = tier[clause][inx]
-            clause = {clause: arg}
-            curr_maker.execute_clause(clause)
-        dfs_expand(level + 1, nick_name, curr_maker, deposit, grids)
-
-
-def parse_launch_config(launch_config):
-    validate_dict_fields(launch_config, _LAUNCH_FIELDS_SPEC)
-    acc = {}
-    # WARNING assume for now that base is filled. No import yet
-    group_name = launch_config['group']
-    base_maker = ConfigMaker(launch_config['base'])
-
-    # execute base modifications
-    if 'base_modify' in launch_config:
-        clauses = launch_config['base_modify']
-        for _clau in clauses:
-            base_maker.execute_clause(_clau)
-
-    # execute particular configs
-    for part in launch_config['particular']:
-        validate_dict_fields(part, _PARTICULAR_FIELDS_SPEC)
-        curr_maker = base_maker.clone()
-        part_name = part['name']
-        # exec modifications
-        if 'modify' in part:
-            clauses = part['modify']
-            for _clau in clauses:
-                curr_maker.execute_clause(_clau)
-        # expand the field
-        if 'expand' in part:
-            assert isinstance(part['expand'], list)
-            dfs_expand(
-                level=0, name='{}_'.format(part_name),
-                maker=curr_maker.clone(), deposit=acc, grids=part['expand']
-            )
+    def add(self, objs, arg):
+        assert len(objs) <= 1, 'add deals with 1 obj everytime: {}'.format(objs)
+        if len(objs) == 1:
+            field = objs[0]
+            if isinstance(self.pointed, list):
+                assert str.isdigit(field)
+                field = int(field)
+                self.pointed.insert(field, arg)
+            elif isinstance(self.pointed, dict):
+                assert field not in self.pointed, 'field {} present in {}'\
+                    .format(field, self.pointed)
+                self.pointed[field] = arg
+            else:
+                raise ValueError("{} is not a container node".format(self.pointed))
         else:
-            acc[part_name] = curr_maker
+            assert isinstance(self.pointed, dict),\
+                '{} is not a dict, cannot use bare add'.format(self.pointed)
+            assert isinstance(arg, dict), 'expect dict when adding into dict'
+            for k in arg.keys():
+                assert k not in self.pointed, \
+                    '{} already present in {}'.format(k, self.pointed)
+            self.pointed.update(arg)
 
-    return group_name, acc
-
-
-def main():
-    parser = argparse.ArgumentParser(description='deploy the experiments')
-    parser.add_argument(
-        '-f', '--file', type=str, required=True,
-        help='a yaml based on our convention describing the experiments to run'
-    )
-    parser.add_argument(
-        '-m', '--mock', nargs='*', type=str, required=False,
-        help='specify a list of configs to be printed in full details'
-    )
-    args = parser.parse_args()
-
-    launch_fname = args.file
-    launch_dir_path = osp.dirname( osp.abspath(launch_fname) )
-
-    with open(launch_fname, 'r') as f:
-        launch_config = yaml.safe_load(f)
-    group_name, cfg_name_2_maker = parse_launch_config(launch_config)
-
-    if args.mock is not None:
-        to_display = args.mock if len(args.mock) > 0 else cfg_name_2_maker.keys()
-        for exp_name in to_display:
-            maker = cfg_name_2_maker[exp_name]
-            cprint(exp_name, color='blue')
-            print(maker.state)
-        return
-
-    dir_name = launch_dir_path.split('/')[-1]
-    assert dir_name == group_name, \
-        "group name: {}, but launch dir name: {}. Match them"\
-        .format(group_name, dir_name)
-    del dir_name
-
-    # go into runs/exp_group_name/
-    os.chdir(launch_dir_path)
-    if not osp.isdir( './runs' ):
-        os.mkdir('./runs')
-        print("making run directory inside launch")
-    os.chdir('./runs')
-
-    for exp_name, maker in cfg_name_2_maker.items():
-        if not osp.isdir(exp_name):
-            maker.state[_META_FIELD_NAME] = {
-                'group': group_name,
-                'name': exp_name
-            }
-            os.mkdir(exp_name)
-            cprint("planting {}".format(exp_name), color='blue')
-            plant_files(launch_dir_path, exp_name, maker.state)
+    def replace(self, objs, arg):
+        assert len(objs) <= 1, 'replace deals with 1 obj everytime: {}'.format(objs)
+        if len(objs) == 1:
+            field = objs[0]
+            if isinstance(self.pointed, list):
+                assert str.isdigit(field)
+                field = int(field)
+                self.pointed[field] = arg
+            elif isinstance(self.pointed, dict):
+                assert field in self.pointed, 'field {} not present in {}'\
+                    .format(field, self.pointed)
+                self.pointed[field] = arg
+            else:
+                raise ValueError("{} is not a container node".format(self.pointed))
         else:
-            print("duplicate {} found. skipping".format(exp_name))
+            self.parent[self.child_token] = arg
+
+    def delete(self, objs):
+        if isinstance(self.pointed, list):
+            objs = map(lambda x: int(x), objs)
+        elif isinstance(self.pointed, dict):
+            pass
+        else:
+            raise ValueError("{} is not a container node".format(self.pointed))
+        for field in objs:
+            del self.pointed[field]
+
+
+def plant_files(launch_dir, dir_name, config_dict):
+    '''
+    plant the config and related files (run.py eval.ipynb) into the specified directory
+    If these files already exist, compare edit timestamp and only copy if outdated.
+    For simplicity, this bahavior is not implemented. Just copy
+    '''
+    with open(osp.join(dir_name, 'config.yml'), 'w') as f:
+        yaml.dump(config_dict, f, default_flow_style=False)
+    if osp.isfile( osp.join(launch_dir, 'run.py') ):
+        # shutil.copy(osp.join(launch_dir, 'run.py'), dir_name)
+        src = osp.join(launch_dir, 'run.py')
+        target = osp.join(dir_name, 'run.py')
+        if osp.islink(target):
+            os.unlink(target)
+        elif osp.isfile(target):
+            os.remove(target)
+        # note that use relative path for maintainability.
+        os.symlink(osp.relpath(src, osp.abspath(dir_name)), target)
 
 
 if __name__ == '__main__':
