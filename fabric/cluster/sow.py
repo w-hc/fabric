@@ -46,41 +46,46 @@ def main():
     LAUNCH_FNAME = args.file
     LAUNCH_DIR_ABSPATH = osp.dirname(osp.abspath(LAUNCH_FNAME))
     RUN_DIR_NAME = args.dir
-
     with open(LAUNCH_FNAME, 'r') as f:
         launch_config = yaml.safe_load(f)
+
+    # parse the config
+    # chdir first. cfg import might assume relpath from launch dir
+    # this statement must come after reading launch_cfg
+    os.chdir(LAUNCH_DIR_ABSPATH)
     group_name, cfg_name_2_maker = parse_launch_config(launch_config)
 
+    # if mocking, print requested configs and quit
     if args.mock is not None:
         to_display = args.mock if len(args.mock) > 0 else cfg_name_2_maker.keys()
-        for exp_name in to_display:
+        for i, exp_name in enumerate(to_display):
             maker = cfg_name_2_maker[exp_name]
-            cprint(exp_name, color='blue')
+            cprint('{}: {}'.format(i, exp_name), color='blue')
             print(yaml.dump(maker.state, default_flow_style=False))
         return
 
-    # check that group namd and launch dir name match
+    # sow the cfgs
+    # 1. check that group namd and launch dir name match
     dir_name = LAUNCH_DIR_ABSPATH.split('/')[-1]
     assert dir_name == group_name, \
         "group name: {}, but launch dir name: {}. Match them"\
         .format(group_name, dir_name)
     del dir_name
 
-    # create runs folder and plant experiments
-    os.chdir(LAUNCH_DIR_ABSPATH)
+    # 2. create exp folder and plant configs
     if not osp.isdir(RUN_DIR_NAME):
         os.mkdir(RUN_DIR_NAME)
         print("making {} inside launch".format(RUN_DIR_NAME))
     os.chdir(RUN_DIR_NAME)
 
-    for exp_name, maker in cfg_name_2_maker.items():
+    for i, (exp_name, maker) in enumerate(cfg_name_2_maker.items()):
         if not osp.isdir(exp_name):
             maker.state[_META_FIELD_NAME] = {
                 'group': group_name,
                 'name': exp_name
             }
             os.mkdir(exp_name)
-            cprint("planting {}".format(exp_name), color='blue')
+            cprint("sowing {}: {}".format(i, exp_name), color='blue')
             plant_files(LAUNCH_DIR_ABSPATH, exp_name, maker.state)
         else:
             print("duplicate {} found. skipping".format(exp_name))
@@ -89,9 +94,20 @@ def main():
 def parse_launch_config(launch_config):
     validate_dict_fields(launch_config, _LAUNCH_FIELDS_SPEC)
     acc = {}
-    # WARNING assume for now that base is filled. No import yet
     group_name = launch_config['group']
-    base_maker = ConfigMaker(launch_config['base'])
+
+    # import pudb
+    # pudb.set_trace()
+
+    # construct base config through import or from 'base'
+    if 'import_base' in launch_config and launch_config['import_base']:
+        import_path = launch_config['import_base']
+        assert 'base' not in launch_config or not launch_config['base'],\
+            'importing from {}, don\'t supply base config'.format(import_path)
+        with open(import_path, 'r') as f:
+            base_maker = ConfigMaker(yaml.safe_load(f))
+    else:
+        base_maker = ConfigMaker(launch_config['base'])
 
     # execute base modifications
     if 'base_modify' in launch_config:
