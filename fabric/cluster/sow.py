@@ -8,6 +8,9 @@ from termcolor import cprint
 
 
 # '_' prefix so that it is sorted to the top when dumping yaml
+_INFO_COLOR = 'blue'
+_WARN_COLOR = 'red'
+
 _META_FIELD_NAME = '__meta__'
 
 _LAUNCH_FIELDS_SPEC = {
@@ -69,7 +72,7 @@ def main():
         to_display = args.mock if len(args.mock) > 0 else cfg_name_2_maker.keys()
         for i, exp_name in enumerate(to_display):
             maker = cfg_name_2_maker[exp_name]
-            cprint('{}: {}'.format(i, exp_name), color='blue')
+            cprint('{}: {}'.format(i, exp_name), color=_INFO_COLOR)
             print(yaml.dump(maker.state, default_flow_style=False))
         return
 
@@ -93,7 +96,7 @@ def main():
             'group': group_name,
             'name': exp_name
         }
-        cprint("sowing {}: {}".format(i, exp_name), color='blue')
+        cprint("sowing {}: {}".format(i, exp_name), color=_INFO_COLOR)
         success = plant_files(
             LAUNCH_DIR_ABSPATH, exp_name, maker.state, overwrite=args.overwrite)
         if success:
@@ -407,9 +410,9 @@ def plant_files(launch_dir, exp_name, cfg_node, overwrite):
         with open(cfg_fname, 'r') as f:
             old_cfg = yaml.safe_load(f)
         if old_cfg == cfg_node:
-            print("identical dup discovered", end='; ')
+            print("dup identical", end='; ')
         else:
-            cprint("dup {} differs".format(exp_name), color='red', end='; ')
+            cprint("dup differs: {}".format(exp_name), color=_WARN_COLOR, end='; ')
         if overwrite:
             print("overwriting")
             pass
