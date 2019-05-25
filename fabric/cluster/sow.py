@@ -376,6 +376,10 @@ def main():
 
     for exp_name, maker in cfg_name_2_maker.items():
         if not osp.isdir(exp_name):
+            maker.state[_META_FIELD_NAME] = {
+                'group': group_name,
+                'name': exp_name
+            }
             os.mkdir(exp_name)
             cprint("planting {}".format(exp_name), color='blue')
             plant_files(launch_dir_path, exp_name, maker.state)
