@@ -1,10 +1,10 @@
-import argparse
-import yaml
 import os
 import os.path as osp
+import argparse
 from copy import deepcopy
 from collections import namedtuple
-from termcolor import colored, cprint
+import yaml
+from termcolor import cprint
 
 
 # '_' prefix so that it is sorted to the top when dumping yaml
@@ -51,7 +51,7 @@ def main():
         for exp_name in to_display:
             maker = cfg_name_2_maker[exp_name]
             cprint(exp_name, color='blue')
-            print(maker.state)
+            print(yaml.dump(maker.state, default_flow_style=False))
         return
 
     dir_name = launch_dir_path.split('/')[-1]
@@ -265,12 +265,6 @@ class ConfigMaker():
         inx = input_list.index(verb)
         return verb, inx
 
-    # def __str__(self):
-    #     pass
-
-    # def __repr__(self):
-    #     pass
-
 
 class NodeTracer():
     def __init__(self, src_node):
@@ -366,24 +360,26 @@ class NodeTracer():
             del self.pointed[field]
 
 
-def plant_files(launch_dir, dir_name, config_dict):
-    '''
-    plant the config and related files (run.py eval.ipynb) into the specified directory
-    If these files already exist, compare edit timestamp and only copy if outdated.
-    For simplicity, this bahavior is not implemented. Just copy
+def plant_files(launch_dir, dir_name, cfg_node):
+    '''plant the config and related files (run.py)
+    Args:
+        launch_dir: abspath! of launch directory from which run.py is copied
+        dir_name: the bare name of experiment folder in which things are dumped
     '''
     with open(osp.join(dir_name, 'config.yml'), 'w') as f:
-        yaml.dump(config_dict, f, default_flow_style=False)
-    if osp.isfile( osp.join(launch_dir, 'run.py') ):
-        # shutil.copy(osp.join(launch_dir, 'run.py'), dir_name)
-        src = osp.join(launch_dir, 'run.py')
-        target = osp.join(dir_name, 'run.py')
-        if osp.islink(target):
-            os.unlink(target)
-        elif osp.isfile(target):
-            os.remove(target)
-        # note that use relative path for maintainability.
-        os.symlink(osp.relpath(src, osp.abspath(dir_name)), target)
+        yaml.dump(cfg_node, f, default_flow_style=False)
+    to_link_over = ('run.py',)
+    for item in to_link_over:
+        if osp.isfile(osp.join(launch_dir, item)):
+            # shutil.copy(osp.join(launch_dir, item), dir_name)
+            src = osp.join(launch_dir, item)
+            target = osp.join(dir_name, item)
+            if osp.islink(target):
+                os.unlink(target)
+            elif osp.isfile(target):
+                os.remove(target)
+            # note that we use relative path for maintainability.
+            os.symlink(osp.relpath(src, osp.abspath(dir_name)), target)
 
 
 if __name__ == '__main__':
