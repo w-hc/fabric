@@ -38,6 +38,10 @@ def main():
         help='the directory in which to plant configs'
     )
     parser.add_argument(
+        '-l', '--log', type=str, default='touched_exps.yml',
+        help='a yml containing a list of abspaths to touched exps'
+    )
+    parser.add_argument(
         '-m', '--mock', nargs='*', type=str, required=False,
         help='specify a list of configs to be printed in full details'
     )
@@ -46,6 +50,7 @@ def main():
     LAUNCH_FNAME = args.file
     LAUNCH_DIR_ABSPATH = osp.dirname(osp.abspath(LAUNCH_FNAME))
     RUN_DIR_NAME = args.dir
+    SOW_LOG_FNAME = osp.join(LAUNCH_DIR_ABSPATH, args.log)
     with open(LAUNCH_FNAME, 'r') as f:
         launch_config = yaml.safe_load(f)
 
@@ -78,6 +83,7 @@ def main():
         print("making {} inside launch".format(RUN_DIR_NAME))
     os.chdir(RUN_DIR_NAME)
 
+    sow_acc = []
     for i, (exp_name, maker) in enumerate(cfg_name_2_maker.items()):
         if not osp.isdir(exp_name):
             maker.state[_META_FIELD_NAME] = {
@@ -87,8 +93,13 @@ def main():
             os.mkdir(exp_name)
             cprint("sowing {}: {}".format(i, exp_name), color='blue')
             plant_files(LAUNCH_DIR_ABSPATH, exp_name, maker.state)
+            sow_acc.append(osp.abspath(exp_name))
         else:
             print("duplicate {} found. skipping".format(exp_name))
+
+    # 3. save a log file for other utils to use
+    with open(SOW_LOG_FNAME, 'w') as f:
+        yaml.dump(sow_acc, f, default_flow_style=False)
 
 
 def parse_launch_config(launch_config):
