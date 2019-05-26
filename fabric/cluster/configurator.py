@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import yaml
 from fabric.utils.io import save_object, load_object
 from fabric.cluster.save_manager import SaveManager
 from fabric.utils.logging import setup_logging
@@ -17,6 +18,8 @@ class Configurator():
         assert(osp.isdir(caller_dir_path))
         self.caller_dir_path = caller_dir_path
         logger.info(self.caller_dir_path)
+        with open(osp.join(caller_dir_path, 'config.yml')) as f:
+            self.config = yaml.load(f)
 
     def service_folder_setup(self, service):
         # note that index is buried
