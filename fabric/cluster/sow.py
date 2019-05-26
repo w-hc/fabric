@@ -191,6 +191,9 @@ def dfs_expand(level, name, maker, deposit, grids):
     iter_clauses = list(tier.keys())
     size = len(tier[iter_clauses[0]])
     for clause in iter_clauses:
+        # broadcast config if of length 1
+        if len(tier[clause]) == 1 and clause != 'alias':
+            tier[clause] = tier[clause] * size
         assert len(tier[clause]) == size
 
     if 'alias' in tier:

@@ -19,7 +19,7 @@ class Configurator():
         self.caller_dir_path = caller_dir_path
         logger.info(self.caller_dir_path)
         with open(osp.join(caller_dir_path, 'config.yml')) as f:
-            self.config = yaml.load(f)
+            self.config = yaml.safe_load(f)
 
     def service_folder_setup(self, service):
         # note that index is buried
