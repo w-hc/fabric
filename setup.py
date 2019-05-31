@@ -9,7 +9,7 @@ setup(
     python_requires='>=3',
     install_requires=[
         # note that these requirements may not be exhaustive
-        'pyyaml'
+        'pyyaml',
         'numpy',
         'torch',
         'wget',
