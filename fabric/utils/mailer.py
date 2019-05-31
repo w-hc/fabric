@@ -2,6 +2,8 @@ import functools
 import traceback
 import smtplib
 from email.mime.text import MIMEText
+from fabric.utils.logging import setup_logging
+logger = setup_logging(__file__)
 
 
 def send_email(subject, body, to):
@@ -34,6 +36,8 @@ class ExceptionEmail:
             # except KeyboardInterrupt:
             #     pass  # do not send email on sigint
             except Exception as e:
+                logger.info(
+                    "Exception triggered. Emailing {}".format(self.address))
                 send_email(
                     subject=self.subject,
                     body=traceback.format_exc(),
