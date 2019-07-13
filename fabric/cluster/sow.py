@@ -139,6 +139,7 @@ def parse_launch_config(launch_config):
         # exec modifications
         if 'modify' in part:
             clauses = part['modify']
+            assert isinstance(clauses, list)
             for _clau in clauses:
                 curr_maker.execute_clause(_clau)
         # expand the field
