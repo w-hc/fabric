@@ -24,11 +24,7 @@ class Configurator():
     def service_folder_setup(self, service):
         # note that index is buried
         dirname = osp.join(self.caller_dir_path, service)
-        if not osp.isdir(dirname):
-            os.mkdir(dirname)
-            logger.info("making {}".format(service))
-        else:
-            logger.info("service dir {} exists. skipping".format(service))
+        os.makedirs(dirname, exist_ok=True)
         return dirname
 
     def get_ckpt_writer(self, save_f, load_f):
