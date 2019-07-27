@@ -13,7 +13,10 @@ SMIT_CMD = Template(
     'sbatch '
     '-d singleton '
     '--nodes=1 -p $partition -c${num_cores} $feature '
-    '--job-name=$name  --output="$log" "$script" '
+    '--output="$log" '
+    '--open-mode=append '
+    '--job-name=$name '
+    '"$script" '
 )
 
 
