@@ -12,8 +12,6 @@ setup(
         'pyyaml',
         'numpy',
         'torch',
-        'wget',
-        'tensorboardX',
     ],
     package_data={
         # If any package contains *.yml, include them:
