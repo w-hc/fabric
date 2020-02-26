@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='ttic_fabric',
+    name='fabric',
     version='0.2.0',
     author='Haochen Wang',
     author_email='whc@uchicago.edu',
