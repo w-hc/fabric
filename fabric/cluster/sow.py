@@ -92,10 +92,10 @@ def main():
 
     sow_acc = []
     for i, (exp_name, maker) in enumerate(cfg_name_2_maker.items()):
-        maker.state[_META_FIELD_NAME] = {
-            'group': group_name,
-            'name': exp_name
-        }
+        # maker.state[_META_FIELD_NAME] = {
+        #     'group': group_name,
+        #     'name': exp_name
+        # }  # HC: remove the meta field for now
         cprint("sowing {}: {}".format(i, exp_name), color=_INFO_COLOR)
         success = plant_files(
             LAUNCH_DIR_ABSPATH, exp_name, maker.state, overwrite=args.overwrite)
