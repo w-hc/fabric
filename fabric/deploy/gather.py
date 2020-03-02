@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+from collections import OrderedDict
 
 
 class Gatherer():
@@ -26,8 +27,8 @@ class Gatherer():
             exp_name: initial_trials/haul/
         '''
         subroot = osp.join(self.root, exp_name, deployed_in)
-        exps = os.listdir(subroot)
-        accu = {}
+        exps = sorted(os.listdir(subroot))
+        accu = OrderedDict()
         for e in exps:
             where2look = osp.join(subroot, e, where_to_look_within_each_exp)
             res = processing_fn(where2look)
