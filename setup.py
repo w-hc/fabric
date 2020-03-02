@@ -22,7 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'smit=fabric.cluster.submit:main',
-            'sow=fabric.cluster.sow:main',
+            'sow=fabric.deploy.sow:main',
         ]
     },
     zip_safe=False  # accessing config files without using pkg_resources.
