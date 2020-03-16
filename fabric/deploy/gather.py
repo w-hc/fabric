@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 '''
 Experiment hierarchy
-    root -> subroot -> deployments
+    root -> subroot -> runs/deployments
 '''
 
 
