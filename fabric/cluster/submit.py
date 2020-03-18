@@ -6,13 +6,13 @@ import subprocess
 from tempfile import NamedTemporaryFile
 
 
-VALID_ACTIONS = ('run', 'cancel')
-DEFAULT_PARTITION = 'greg-gpu'
+VALID_CMDS = ('run', 'cancel')
+DEFAULT_PARTITION = 'greg-gpu,rc-own-gpu'
 CANCEL_CMD = Template('scancel -n $name')
 SMIT_CMD = Template(
     'sbatch '
     '-d singleton '
-    '--nodes=1 -p $partition -c${num_cores} $feature '
+    '--nodes=1 -p $partition -c${num_cores} $feature $machine '
     '--output="$log" '
     '--open-mode=append '
     '--job-name=$name '
@@ -35,7 +35,7 @@ def temp_sh_exec(command_closure, sh_content, num_runs, dummy=True):
 
 
 def task_execute(
-    task_dir, action, length, dummy, partition, num_cores, features, unknown
+    task_dir, command, length, dummy, partition, num_cores, features, unknown
 ):
     task_name = task_dir.split('/')[-1]
     slurm_out = path.join(task_dir, 'slurm.out')
@@ -43,9 +43,10 @@ def task_execute(
     num_runs = int(length)
     # bash: must use single quote to escape input like 1080ti|titanx
     features = '-C \'{}\''.format(features) if features else ''
+    machine = '-x gpu-g20,gpu-g26,gpu-g38'  # if partition == 'rc-own-gpu' else ''
     params = '' if unknown is None else ' '.join(unknown)
 
-    if action == 'run':
+    if command == 'run':
         if not path.isfile(run_script):
             raise ValueError("{} is not a valid file".format(run_script))
 
@@ -56,10 +57,11 @@ def task_execute(
             SMIT_CMD.substitute(
                 partition=partition, num_cores=num_cores,
                 feature=features, name=task_name,
-                log=slurm_out, script=sbatch_file_name
+                log=slurm_out, script=sbatch_file_name,
+                machine=machine
             )
         temp_sh_exec(cmd_closure, sh_content, num_runs, dummy)
-    elif action == 'cancel':
+    elif command == 'cancel':
         to_exec = CANCEL_CMD.substitute(name=task_name)
         print(to_exec)
         print("")
@@ -68,13 +70,13 @@ def task_execute(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='TTIC slurm sbatch submit')
+    parser = argparse.ArgumentParser(description='slurm sbatch submit')
     parser.add_argument(
         '-f', '--file', type=str, required=True,
         help='a yaml containing a list of absolute paths to the job folders')
     parser.add_argument(
-        '-a', '--action', default='run',
-        help='one of {}, default {}'.format(VALID_ACTIONS, VALID_ACTIONS[0]))
+        '-c', '--command', default='run',
+        help='one of {}, default {}'.format(VALID_CMDS, VALID_CMDS[0]))
     parser.add_argument(
         '-p', '--partition', default=DEFAULT_PARTITION, type=str,
         help='the partition the job is submitted to. default {}'.format(DEFAULT_PARTITION))
@@ -95,9 +97,9 @@ def main():
     if args.dummy:
         print("WARN: using dummy mode")
     print("Using partition {}".format(args.partition))
-    if args.action not in VALID_ACTIONS:
+    if args.command not in VALID_CMDS:
         raise ValueError(
-            "action must be one of {}, but given: {}".format(VALID_ACTIONS, args.action)
+            "command must be one of {}, but given: {}".format(VALID_CMDS, args.command)
         )
     with open(args.file) as f:
         task_dir_list = yaml.safe_load(f)
@@ -106,7 +108,7 @@ def main():
             raise ValueError("{} is not a valid directory".format(task_dir))
         else:
             task_execute(
-                task_dir, args.action, args.length, args.dummy,
+                task_dir, args.command, args.length, args.dummy,
                 args.partition, args.num_cores, args.feature_constraints,
                 unknown
             )
