@@ -1,3 +1,4 @@
+import os
 import os.path as path
 import argparse
 import yaml
@@ -6,16 +7,30 @@ import subprocess
 from tempfile import NamedTemporaryFile
 
 
+WHOAMI = os.environ.get('SELF', 'ttic')
+if WHOAMI == "ttic":
+    DEFAULT_PARTITION = 'greg-gpu,rc-own-gpu'
+    GPU_REQ_FLAG = 'c'
+    MISC_SBATCH_OPT = '-x gpu-g20,gpu-g26,gpu-g38'
+    # EXCLUDE_NODES =
+elif WHOAMI == 'autobot':
+    DEFAULT_PARTITION = 'long,short'
+    GPU_REQ_FLAG = 'G'
+    MISC_SBATCH_OPT = ''
+else:
+    raise ValueError('unregistered machine identifier {}'.format(WHOAMI))
+
 VALID_CMDS = ('run', 'cancel')
-DEFAULT_PARTITION = 'greg-gpu,rc-own-gpu'
 CANCEL_CMD = Template('scancel -n $name')
-SMIT_CMD = Template(
+SBATCH_CMD = Template(
     'sbatch '
     '-d singleton '
-    '--nodes=1 -p $partition -c${num_cores} $feature $machine '
+    '--job-name=$name '
+    '-p $partition '
+    '--nodes=1 -$GPU_REQ_FLAG ${num_cores} '
+    '$feature $misc '
     '--output="$log" '
     '--open-mode=append '
-    '--job-name=$name '
     '"$script" '
 )
 
@@ -43,7 +58,9 @@ def task_execute(
     num_runs = int(length)
     # bash: must use single quote to escape input like 1080ti|titanx
     features = '-C \'{}\''.format(features) if features else ''
-    machine = '-x gpu-g20,gpu-g26,gpu-g38'  # if partition == 'rc-own-gpu' else ''
+    if WHOAMI == 'autobot':
+        assert len(features) == 0, \
+            'autobot does not yet support -C features, but given {}'.format(features)
     params = '' if unknown is None else ' '.join(unknown)
 
     if command == 'run':
@@ -54,11 +71,12 @@ def task_execute(
             + str.encode('python {} {}\n'.format(run_script, params))
         print(sh_content)
         cmd_closure = lambda sbatch_file_name:\
-            SMIT_CMD.substitute(
-                partition=partition, num_cores=num_cores,
-                feature=features, name=task_name,
+            SBATCH_CMD.substitute(
+                name=task_name,
+                partition=partition,
+                GPU_REQ_FLAG=GPU_REQ_FLAG, num_cores=num_cores,
+                feature=features, misc=MISC_SBATCH_OPT,
                 log=slurm_out, script=sbatch_file_name,
-                machine=machine
             )
         temp_sh_exec(cmd_closure, sh_content, num_runs, dummy)
     elif command == 'cancel':
@@ -94,6 +112,7 @@ def main():
         help='in dummy mode the slurm command is printed but not executed')
     args, unknown = parser.parse_known_args()  # pass unknown to runner script
 
+    print("submitting slurm jobs on {}".format(WHOAMI))
     if args.dummy:
         print("WARN: using dummy mode")
     print("Using partition {}".format(args.partition))
