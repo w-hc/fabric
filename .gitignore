@@ -1,4 +1,7 @@
-# general things to ignore
+# editor ignore
+.vscode
+
+# general ignore options
 build/
 dist/
 *.egg-info/
