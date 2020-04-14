@@ -21,9 +21,8 @@ class Gatherer():
         '''
         package_path = research_project_cls.__path__[0]
         # the exp dir is parallel to the package
-        basedir = osp.dirname(package_path)
-        self.root = basedir
-        self.exp_store_root = osp.join(basedir, exp_root)
+        self._root = osp.dirname(package_path)
+        self.exp_store_root = osp.join(self._root, exp_root)
         self.deployed_in = 'runs'
         self.where_to_look_within_each_exp = 'output'
 
