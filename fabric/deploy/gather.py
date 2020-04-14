@@ -26,16 +26,16 @@ class Gatherer():
         self.deployed_in = 'runs'
         self.where_to_look_within_each_exp = 'output'
 
-    def _path_to_subroot(self, subroot: str):
+    def path_to_subroot(self, subroot: str):
         return osp.join(self.exp_store_root, subroot)
 
     def browse_subroot(self, subroot: str):
-        subroot_p = self._path_to_subroot(subroot)
+        subroot_p = self.path_to_subroot(subroot)
         deployed_p = osp.join(subroot_p, self.deployed_in)
         return sorted(os.listdir(deployed_p))
 
     def path_to_exp(self, subroot, exp):
-        path = self._path_to_subroot(subroot)
+        path = self.path_to_subroot(subroot)
         # .../ablate_different_arch/runs/resnet34
         return osp.join(path, self.deployed_in, exp)
 
