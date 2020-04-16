@@ -135,7 +135,7 @@ class Video():
             adata, sr = load_audio(
                 transcode_audio_fname, start_sec, end_sec, backend='soundfile'
             )
-            return adata
+            return adata, sr
         else:
             container = self.container
 
