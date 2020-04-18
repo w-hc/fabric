@@ -21,7 +21,7 @@ def _sf_load_audio(fname, start_sec, end_sec):
         start, end = check_start_end_time(start_sec, end_sec, duration_secs)
         start, end = int(start * sampling_rate), int(end * sampling_rate)
         f.seek(start)
-        data = f.read(frames=end - start, dtype='float32', always_2d=False)
+        data = f.read(frames=end - start, dtype='float32', always_2d=True)
         data = data.T
     return data, sampling_rate
 
