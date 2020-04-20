@@ -1,7 +1,7 @@
 import os
 import os.path as osp
 import yaml
-from fabric.utils.io import save_object, load_object
+from fabric.io import save_object, load_object
 from fabric.cluster.save_manager import SaveManager
 from fabric.utils.logging import setup_logging
 
