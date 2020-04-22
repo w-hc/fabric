@@ -15,8 +15,9 @@ def check_start_end_time(start, end, total_duration):
     else:
         if end > total_duration:
             raise ValueError(
-                "end exceeds {} stream of length {:.2f}s".format(
-                    total_duration)
+                "end exceeds {:.2f} stream of length {:.2f}s".format(
+                    end, total_duration
+                )
             )
 
     # 3. make sure the ordering is respected
