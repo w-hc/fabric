@@ -8,6 +8,7 @@ from tempfile import NamedTemporaryFile
 
 
 WHOAMI = os.environ.get('SELF', 'ttic')
+JOB_ARGS = os.environ.get('JARGS', '')
 if WHOAMI == "ttic":
     DEFAULT_PARTITION = 'greg-gpu,rc-own-gpu'
     GPU_REQ_FLAG = 'c'
@@ -28,7 +29,7 @@ SBATCH_CMD = Template(
     '--job-name=$name '
     '-p $partition '
     '--nodes=1 -$GPU_REQ_FLAG ${num_cores} '
-    '$feature $misc '
+    '$misc $extra '
     '--output="$log" '
     '--open-mode=append '
     '"$script" '
@@ -50,32 +51,28 @@ def temp_sh_exec(command_closure, sh_content, num_runs, dummy=True):
 
 
 def task_execute(
-    task_dir, command, length, dummy, partition, num_cores, features, unknown
+    task_dir, command, length, dummy, partition, num_cores, unknown
 ):
     task_name = task_dir.split('/')[-1]
     slurm_out = path.join(task_dir, 'slurm.out')
     run_script = path.join(task_dir, 'run.py')
     num_runs = int(length)
-    # bash: must use single quote to escape input like 1080ti|titanx
-    features = '-C \'{}\''.format(features) if features else ''
-    if WHOAMI == 'autobot':
-        assert len(features) == 0, \
-            'autobot does not yet support -C features, but given {}'.format(features)
-    params = '' if unknown is None else ' '.join(unknown)
+    extra = ' '.join(unknown)
+    print(extra)
 
     if command == 'run':
         if not path.isfile(run_script):
             raise ValueError("{} is not a valid file".format(run_script))
 
         sh_content = b'#!/usr/bin/env bash\n' \
-            + str.encode('python {} {}\n'.format(run_script, params))
+            + str.encode('python {} {}\n'.format(run_script, JOB_ARGS))
         print(sh_content)
         cmd_closure = lambda sbatch_file_name:\
             SBATCH_CMD.substitute(
                 name=task_name,
                 partition=partition,
                 GPU_REQ_FLAG=GPU_REQ_FLAG, num_cores=num_cores,
-                feature=features, misc=MISC_SBATCH_OPT,
+                misc=MISC_SBATCH_OPT, extra=extra,
                 log=slurm_out, script=sbatch_file_name,
             )
         temp_sh_exec(cmd_closure, sh_content, num_runs, dummy)
@@ -105,9 +102,6 @@ def main():
         '-l', '--length', type=int, default=1,
         help='the length of a series. Not fully implemented. See doc')
     parser.add_argument(
-        '-C', '--feature-constraints', type=str, default='',
-        help='required features, such as highmem or titanx')
-    parser.add_argument(
         '-d', '--dummy', default=False, action='store_true',
         help='in dummy mode the slurm command is printed but not executed')
     args, unknown = parser.parse_known_args()  # pass unknown to runner script
@@ -128,6 +122,5 @@ def main():
         else:
             task_execute(
                 task_dir, args.command, args.length, args.dummy,
-                args.partition, args.num_cores, args.feature_constraints,
-                unknown
+                args.partition, args.num_cores, unknown
             )
