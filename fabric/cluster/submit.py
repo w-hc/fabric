@@ -22,7 +22,7 @@ elif WHOAMI == 'autobot':
 else:
     raise ValueError('unregistered machine identifier {}'.format(WHOAMI))
 
-VALID_CMDS = ('run', 'cancel')
+VALID_ACTS = ('run', 'cancel')
 CANCEL_CMD = 'scancel -n {name}'
 SBATCH_CMD = (
     'sbatch '
@@ -52,7 +52,7 @@ def temp_sh_exec(command_closure, sh_content, num_runs, dummy=True):
 
 
 def task_execute(
-    task_dir, command, length, dummy, partition, num_cores, unknown
+    task_dir, action, length, dummy, partition, num_cores, unknown
 ):
     os.chdir(task_dir)
     task_name = task_dir.split('/')[-1]
@@ -60,7 +60,7 @@ def task_execute(
     num_runs = int(length)
     extra = ' '.join(unknown)
 
-    if command == 'run':
+    if action == 'run':
         sh_content = b'#!/usr/bin/env bash\n' + str.encode('{}\n'.format(JCMD))
         print(sh_content)
         cmd_closure = lambda sbatch_file_name:\
@@ -72,7 +72,7 @@ def task_execute(
                 log=slurm_out, script=sbatch_file_name,
             )
         temp_sh_exec(cmd_closure, sh_content, num_runs, dummy)
-    elif command == 'cancel':
+    elif action == 'cancel':
         to_exec = CANCEL_CMD.format(name=task_name)
         print(to_exec)
         print("")
@@ -86,8 +86,8 @@ def main():
         '-f', '--file', type=str, required=True,
         help='a yaml containing a list of absolute paths to the job folders')
     parser.add_argument(
-        '-c', '--command', default='run',
-        help='one of {}, default {}'.format(VALID_CMDS, VALID_CMDS[0]))
+        '-a', '--action', default='run',
+        help='one of {}, default {}'.format(VALID_ACTS, VALID_ACTS[0]))
     parser.add_argument(
         '-p', '--partition', default=DEFAULT_PARTITION, type=str,
         help='the partition the job is submitted to. default {}'.format(DEFAULT_PARTITION))
@@ -106,9 +106,9 @@ def main():
     if args.dummy:
         print("WARN: using dummy mode")
     print("Using partition {}".format(args.partition))
-    if args.command not in VALID_CMDS:
+    if args.action not in VALID_ACTS:
         raise ValueError(
-            "command must be one of {}, but given: {}".format(VALID_CMDS, args.command)
+            "action must be one of {}, but given: {}".format(VALID_ACTS, args.action)
         )
     with open(args.file) as f:
         task_dir_list = yaml.safe_load(f)
@@ -117,6 +117,6 @@ def main():
             raise ValueError("{} is not a valid directory".format(task_dir))
         else:
             task_execute(
-                task_dir, args.command, args.length, args.dummy,
+                task_dir, args.action, args.length, args.dummy,
                 args.partition, args.num_cores, unknown
             )
