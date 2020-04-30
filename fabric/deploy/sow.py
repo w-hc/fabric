@@ -403,7 +403,7 @@ class NodeTracer():
 
 
 def plant_files(launch_dir, exp_name, cfg_node, overwrite):
-    '''plant the config and related files (run.py)
+    '''plant the config
     Args:
         launch_dir: abspath! of launch directory from which run.py is copied
         exp_name: the bare name of experiment folder in which things are dumped
@@ -428,18 +428,6 @@ def plant_files(launch_dir, exp_name, cfg_node, overwrite):
 
     with open(cfg_fname, 'w') as f:
         yaml.dump(cfg_node, f, default_flow_style=False)
-    to_link_over = ('run.py',)
-    for item in to_link_over:
-        if osp.isfile(osp.join(launch_dir, item)):
-            # shutil.copy(osp.join(launch_dir, item), exp_name)
-            src = osp.join(launch_dir, item)
-            target = osp.join(exp_name, item)
-            if osp.islink(target):
-                os.unlink(target)
-            elif osp.isfile(target):
-                os.remove(target)
-            # note that we use relative path for maintainability.
-            os.symlink(osp.relpath(src, osp.abspath(exp_name)), target)
     return True
 
 

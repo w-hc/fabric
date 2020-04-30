@@ -2,13 +2,14 @@ import os
 import os.path as path
 import argparse
 import yaml
-from string import Template
 import subprocess
 from tempfile import NamedTemporaryFile
 
+if 'JCMD' not in os.environ:
+    raise ValueError("please specify the job command")
+JCMD = os.environ['JCMD']
 
 WHOAMI = os.environ.get('SELF', 'ttic')
-JOB_ARGS = os.environ.get('JARGS', '')
 if WHOAMI == "ttic":
     DEFAULT_PARTITION = 'greg-gpu,rc-own-gpu'
     GPU_REQ_FLAG = 'c'
@@ -17,22 +18,22 @@ if WHOAMI == "ttic":
 elif WHOAMI == 'autobot':
     DEFAULT_PARTITION = 'long,short'
     GPU_REQ_FLAG = 'G'
-    MISC_SBATCH_OPT = ''
+    MISC_SBATCH_OPT = '-x autobot-1-1'
 else:
     raise ValueError('unregistered machine identifier {}'.format(WHOAMI))
 
 VALID_CMDS = ('run', 'cancel')
-CANCEL_CMD = Template('scancel -n $name')
-SBATCH_CMD = Template(
+CANCEL_CMD = 'scancel -n {name}'
+SBATCH_CMD = (
     'sbatch '
     '-d singleton '
-    '--job-name=$name '
-    '-p $partition '
-    '--nodes=1 -$GPU_REQ_FLAG ${num_cores} '
-    '$misc $extra '
-    '--output="$log" '
+    '--job-name={name} '
+    '-p {partition} '
+    '--nodes=1 -{GPU_REQ_FLAG} {num_cores} '
+    '{misc} {extra} '
+    '--output="{log}" '
     '--open-mode=append '
-    '"$script" '
+    '"{script}" '
 )
 
 
@@ -53,22 +54,17 @@ def temp_sh_exec(command_closure, sh_content, num_runs, dummy=True):
 def task_execute(
     task_dir, command, length, dummy, partition, num_cores, unknown
 ):
+    os.chdir(task_dir)
     task_name = task_dir.split('/')[-1]
     slurm_out = path.join(task_dir, 'slurm.out')
-    run_script = path.join(task_dir, 'run.py')
     num_runs = int(length)
     extra = ' '.join(unknown)
-    print(extra)
 
     if command == 'run':
-        if not path.isfile(run_script):
-            raise ValueError("{} is not a valid file".format(run_script))
-
-        sh_content = b'#!/usr/bin/env bash\n' \
-            + str.encode('python {} {}\n'.format(run_script, JOB_ARGS))
+        sh_content = b'#!/usr/bin/env bash\n' + str.encode('{}\n'.format(JCMD))
         print(sh_content)
         cmd_closure = lambda sbatch_file_name:\
-            SBATCH_CMD.substitute(
+            SBATCH_CMD.format(
                 name=task_name,
                 partition=partition,
                 GPU_REQ_FLAG=GPU_REQ_FLAG, num_cores=num_cores,
@@ -77,7 +73,7 @@ def task_execute(
             )
         temp_sh_exec(cmd_closure, sh_content, num_runs, dummy)
     elif command == 'cancel':
-        to_exec = CANCEL_CMD.substitute(name=task_name)
+        to_exec = CANCEL_CMD.format(name=task_name)
         print(to_exec)
         print("")
         if not dummy:
