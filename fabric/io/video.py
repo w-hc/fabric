@@ -26,7 +26,7 @@ __all__ = ['Video']
 class VideoMeta():
     '''This is to ensure that has_video and has_audio are tied to meta'''
     def __init__(self, container):
-        v_meta, a_meta = self.probe_meta(container)
+        v_meta, a_meta = self._probe_meta(container)
         self.video = v_meta
         self.audio = a_meta
 
@@ -37,7 +37,7 @@ class VideoMeta():
         return self.audio is not None
 
     @staticmethod
-    def probe_meta(container):
+    def _probe_meta(container):
         v_meta, a_meta = None, None
         if container.streams.video:
             vstream = container.streams.video[0]
