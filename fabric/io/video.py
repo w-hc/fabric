@@ -73,6 +73,7 @@ class VideoMeta():
 
 class Video():
     def __init__(self, fname):
+        assert osp.isfile(fname), f'{fname} does not exist'
         self.fname = fname
         self.container = None
         self._meta = None
