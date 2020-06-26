@@ -121,6 +121,19 @@ class Video():
         )
         return vdata
 
+    def grab_video_key_frame(self, start_sec=None, end_sec=None):
+        self._confirm_container_opened()
+        if not self.meta.has_video():
+            raise ValueError("no visual for this file")
+        start_sec, end_sec = check_start_end_time(
+            start_sec, end_sec, self.meta.video['length_in_secs']
+        )
+        container = self.container
+
+        frame = _grab_video_key_frame(container, start_sec, end_sec)
+        frame = frame.to_rgb().to_ndarray()
+        return frame
+
     def load_audio_frames(self, start_sec=None, end_sec=None):
         self._confirm_container_opened()
         if not self.meta.has_audio():
@@ -155,6 +168,16 @@ def read_from_stream(container, stream, stream_info, start_secs, end_secs):
         container, start_secs, end_secs,
         pts_unit='sec', stream=stream, stream_name=stream_info
     )
+
+
+def _grab_video_key_frame(container, start_secs, end_secs):
+    video_stream = container.streams.video[0]
+    video_stream.codec_context.skip_frame = 'NONKEY'
+    mid_point = (start_secs - end_secs) / 2
+    offset = int(math.floor(mid_point * (1 / video_stream.time_base)))
+    container.seek(offset, any_frame=False, backward=True, stream=video_stream)
+    for frame in container.decode(video_stream):
+        return frame
 
 
 def _read_from_stream(
