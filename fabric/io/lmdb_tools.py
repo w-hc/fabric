@@ -1,16 +1,25 @@
 """
-The code is adapted from Yuxin Wu's tensorpack library.
-1. the default serializer is just Python pickle and it is pretty fast
-2. LMDB allows duplicate keys. Check against duplicate keys yourself.
+The code is adapted from Yuxin Wu's tensorpack dataflow library.
+1. the default serializer is just Python pickle and according to Yuxin it is as
+fast as msgpack.
+2. LMDB overwrites values if given duplicate keys. Check against duplicate keys yourself.
 3. In addition to the (k, v) entries, 2 additional items __len__, and __keys__
 are stored which corresponds to the size of entries and the sorted list of keys
+
+4. Critical for PyTorch Multiprocessing Spawn, lmdb environment object itself
+cannot be pickled. Hence a walkaround is used here. See __setstate__ and __getstate__
+which override the default pickling behavior to recreate a new DB connection upon
+pickling.
 """
 from pathlib import Path
 import platform
 import lmdb
-from dataflow.utils.serialize import dumps, loads
+import pickle
 from dataflow.utils.utils import get_tqdm
 from dataflow.utils import logger
+
+dumps = lambda x: pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+loads = pickle.loads
 
 __all__ = ['save_to_lmdb', 'LMDBData']
 
@@ -97,27 +106,51 @@ def save_to_lmdb(db_fname, stream, write_frequency=5000):
 
 
 class LMDBData():
+    """
+    https://github.com/pytorch/vision/issues/689 provides solution on how to
+    deal with the un-picklable db Environment.
+    """
     def __init__(self, db_fname, readahead=False):
+        self.db_fname = db_fname
+        self.readahead = readahead
         # disabling readahead improves random read performance
-        self.lmdb = lmdb.open(
-            db_fname, subdir=False, readonly=True, lock=False,
-            readahead=readahead, map_size=1099511627776 * 2, max_readers=100
+
+        self.read_txn = self.make_read_transaction()
+        self.length = self.__getitem__(b'__len__')
+
+    def make_read_transaction(self):
+        db = lmdb.open(
+            self.db_fname, subdir=False, readonly=True, lock=False,
+            readahead=self.readahead, map_size=1099511627776 * 2,
+            max_readers=100
         )
-        self.length = None
+        txn = db.begin(write=False)
+        return txn
+
+    def __getstate__(self):
+        """
+        Used only by pickle to customize its behavior so as to ignore the db txn
+        """
+        state = self.__dict__
+        state['read_txn'] = None
+        return state
+
+    def __setstate__(self, state):
+        """
+        Used only by pickle to customize its behavior so as to ignore the db txn
+        """
+        self.__dict__ = state
+        self.read_txn = self.make_read_transaction()
 
     def __getitem__(self, key):
         assert isinstance(key, (bytes, str)), f"{key} is not string or bytes"
         if isinstance(key, str):
             key = key.encode("ascii")
-        with self.lmdb.begin(write=False) as txn:
-            res = txn.get(key)
-            res = loads(res)
+        res = self.read_txn.get(key)
+        res = loads(res)
         return res
 
     def __len__(self):
-        if self.length is None:
-            size = self.__getitem__(b'__len__')
-            self.length = size
         return self.length
 
     def keys(self):

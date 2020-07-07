@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
+import pickle
 from fabric.io.lmdb_tools import save_to_lmdb, LMDBData
 
 
@@ -21,8 +22,8 @@ class DummyStream():
 
 def get_db_fname():
     root = Path("/scratch/haochenw")
-    # root = Path("/compute/autobot-0-9/haochenw/")  # from SSD of another machine
-    # root = Path("/projects/haochenw")  # from a shared HDD
+    root = Path("/compute/autobot-0-9/haochenw/")  # from SSD of another machine
+    root = Path("/projects/haochenw")  # from a shared HDD
     fname = root / "db1.lmdb"
     fname = str(fname)
     return fname
@@ -45,6 +46,19 @@ def load_database():
     np.random.shuffle(keys)
     for k in tqdm(keys):
         val = db[k]
+
+
+def test_pickling_behavior():
+    """
+    Make sure that the Wrapper is picklable!
+    Crucial for torch multiprocessing spawn
+    """
+    fname = get_db_fname()
+    dset = LMDBData(fname, readahead=False)
+    obj = pickle.dumps(dset, protocol=-1)
+    del dset
+    dset = pickle.loads(obj)
+    print(len(dset.keys()))
 
 
 def load_discrete_files():
@@ -71,8 +85,10 @@ if __name__ == "__main__":
     # fname = Path(get_db_fname())
     # fname.unlink(missing_ok=True)
     # create_database()
-    load_database()
+    # load_database()
     # load_discrete_files()
+
+    test_pickling_behavior()
     """
     testing shows that when it comes to loading files from HDD,
     if I disable readahead, lmdb loading has even faster and stabler throughput
