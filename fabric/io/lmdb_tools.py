@@ -126,5 +126,5 @@ class LMDBData():
             self.length = size
         return self.length
 
-    def query_keys(self):
+    def keys(self):
         return self.get(b'__keys__')
