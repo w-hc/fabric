@@ -104,17 +104,10 @@ class LMDBData():
         )
         self.length = None
 
-    def get(self, key):
-        """
-        Args:
-            key (str or list of str)
-        """
-        # if not isinstance(keys, (list, tuple)):
-        #     keys = [keys]
+    def __getitem__(self, key):
         assert isinstance(key, (bytes, str)), f"{key} is not string or bytes"
         if isinstance(key, str):
             key = key.encode("ascii")
-
         with self.lmdb.begin(write=False) as txn:
             res = txn.get(key)
             res = loads(res)
@@ -122,9 +115,9 @@ class LMDBData():
 
     def __len__(self):
         if self.length is None:
-            size = self.get(b'__len__')
+            size = self.__getitem__(b'__len__')
             self.length = size
         return self.length
 
     def keys(self):
-        return self.get(b'__keys__')
+        return self.__getitem__(b'__keys__')
