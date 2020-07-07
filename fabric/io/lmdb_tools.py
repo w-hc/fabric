@@ -97,10 +97,11 @@ def save_to_lmdb(db_fname, stream, write_frequency=5000):
 
 
 class LMDBData():
-    def __init__(self, db_fname):
+    def __init__(self, db_fname, readahead=False):
+        # disabling readahead improves random read performance
         self.lmdb = lmdb.open(
             db_fname, subdir=False, readonly=True, lock=False,
-            readahead=True, map_size=1099511627776 * 2, max_readers=100
+            readahead=readahead, map_size=1099511627776 * 2, max_readers=100
         )
         self.length = None
 
