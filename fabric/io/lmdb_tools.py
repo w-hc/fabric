@@ -12,16 +12,18 @@ which override the default pickling behavior to recreate a new DB connection upo
 pickling.
 """
 from pathlib import Path
+import io
 import platform
 import lmdb
 import pickle
-from dataflow.utils.utils import get_tqdm
-from dataflow.utils import logger
+from PIL import Image
+from tqdm import tqdm
+from dataflow.utils import logger  # TODO: add a consistent logger for fabric itself
 
 dumps = lambda x: pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
 loads = pickle.loads
 
-__all__ = ['save_to_lmdb', 'LMDBData']
+__all__ = ['save_to_lmdb', 'LMDBData', 'ImageLMDB']
 
 
 def probe_length(stream):
@@ -73,21 +75,24 @@ def save_to_lmdb(db_fname, stream, write_frequency=5000):
         txn = put_or_grow(txn, key, value)
         return txn
 
-    with get_tqdm(total=size) as pbar:
+    with tqdm(total=size) as pbar:
         idx = -1
-        keys = set([])
+        existing_keys = set([])  # for fast membership testing only
+        keys = []
 
         # LMDB transaction is not exception-safe!
         # although it has a context manager interface
         txn = db.begin(write=True)
         for idx, (k, v) in enumerate(stream):
-
             k = str(k).encode('ascii')
-            if k in keys:
+            if k in existing_keys:
                 raise ValueError(f"key {k} is already used")
+
             v = dumps(v)
             txn = put_or_grow(txn, k, v)
-            keys.add(k)
+
+            existing_keys.add(k)
+            keys.append(k)  # guarantee insertion order.
 
             pbar.update()
             if (idx + 1) % write_frequency == 0:
@@ -95,7 +100,6 @@ def save_to_lmdb(db_fname, stream, write_frequency=5000):
                 txn = db.begin(write=True)
         txn.commit()
 
-        keys = sorted(keys)
         with db.begin(write=True) as txn:
             txn = put_or_grow(txn, b'__keys__', dumps(keys))
             txn = put_or_grow(txn, b'__len__', dumps(len(keys)))
@@ -111,12 +115,12 @@ class LMDBData():
     deal with the un-picklable db Environment.
     """
     def __init__(self, db_fname, readahead=False):
-        self.db_fname = db_fname
+        self.db_fname = str(db_fname)
         self.readahead = readahead
         # disabling readahead improves random read performance
 
         self.read_txn = self.make_read_transaction()
-        self.length = self.__getitem__(b'__len__')
+        self.length = self._retrieve_item(b'__len__')
 
     def make_read_transaction(self):
         db = lmdb.open(
@@ -143,6 +147,11 @@ class LMDBData():
         self.read_txn = self.make_read_transaction()
 
     def __getitem__(self, key):
+        """this is public, and can be customzized by children"""
+        return self._retrieve_item(key)
+
+    def _retrieve_item(self, key):
+        """this method is private and not user-facing, not customizable"""
         assert isinstance(key, (bytes, str)), f"{key} is not string or bytes"
         if isinstance(key, str):
             key = key.encode("ascii")
@@ -154,4 +163,19 @@ class LMDBData():
         return self.length
 
     def keys(self):
-        return self.__getitem__(b'__keys__')
+        return self._retrieve_item(b'__keys__')
+
+
+class ImageLMDB(LMDBData):
+    """
+    Images enjoy significant space savings from PNG/JPG format.
+    When saving, save the raw file bytes.
+    When loading, convert the bytes to Image with a wrapper
+    """
+    def __getitem__(self, key):
+        bytes_data = super().__getitem__(key)
+        buf = io.BytesIO()
+        buf.write(bytes_data)
+        buf.seek(0)
+        img = Image.open(buf)
+        return img
