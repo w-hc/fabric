@@ -7,7 +7,7 @@ fast as msgpack.
 are stored which corresponds to the size of entries and the sorted list of keys
 
 4. Critical for PyTorch Multiprocessing Spawn, lmdb environment object itself
-cannot be pickled. Hence a walkaround is used here. See __setstate__ and __getstate__
+cannot be pickled. Hence a workaround is used here. See __setstate__ and __getstate__
 which override the default pickling behavior to recreate a new DB connection upon
 pickling.
 """
