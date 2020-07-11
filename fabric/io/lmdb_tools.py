@@ -10,6 +10,15 @@ are stored which corresponds to the size of entries and the sorted list of keys
 cannot be pickled. Hence a workaround is used here. See __setstate__ and __getstate__
 which override the default pickling behavior to recreate a new DB connection upon
 pickling.
+
+Problems with this warpper:
+1. LMDB is a sorted k-v store based on the sorted key __bytes__ (Not the original
+string!). However there is no requirement on the key ordering
+of the input stream. The __key__ field simply keeps a copy of all the keys
+in insertion order, but the insertion order != storage order.
+
+2. There should be a language neutral way to store bytes value unmodified,
+rather than wrapping bytes further in the pickle layer.
 """
 from pathlib import Path
 import io
