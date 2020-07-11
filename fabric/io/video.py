@@ -173,7 +173,7 @@ def read_from_stream(container, stream, stream_info, start_secs, end_secs):
 def _grab_video_key_frame(container, start_secs, end_secs):
     video_stream = container.streams.video[0]
     video_stream.codec_context.skip_frame = 'NONKEY'
-    mid_point = (start_secs - end_secs) / 2
+    mid_point = (start_secs + end_secs) / 2
     offset = int(math.floor(mid_point * (1 / video_stream.time_base)))
     container.seek(offset, any_frame=False, backward=True, stream=video_stream)
     for frame in container.decode(video_stream):
