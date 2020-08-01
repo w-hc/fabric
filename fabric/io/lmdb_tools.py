@@ -43,6 +43,14 @@ def probe_length(stream):
     return sz
 
 
+def pillow_img_to_bytes(img, img_format='jpeg'):
+    buf = io.BytesIO()
+    img.save(buf, format=img_format)
+    value = buf.getvalue()
+    buf.close()
+    return value
+
+
 def save_to_lmdb(db_fname, stream, write_frequency=5000):
     """
     Adapted from
