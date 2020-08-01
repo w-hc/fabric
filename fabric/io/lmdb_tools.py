@@ -30,7 +30,7 @@ from tqdm import tqdm
 from dataflow.utils import logger  # TODO: add a consistent logger for fabric itself
 
 dumps = lambda x: pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-loads = pickle.loads
+# loads = pickle.loads
 
 __all__ = ['save_to_lmdb', 'LMDBData', 'ImageLMDB']
 
@@ -123,13 +123,33 @@ class LMDBData():
     https://github.com/pytorch/vision/issues/689 provides solution on how to
     deal with the un-picklable db Environment.
     """
-    def __init__(self, db_fname, readahead=False):
+    def __init__(self, db_fname, readahead=False, decoding_func=pickle.loads):
         self.db_fname = str(db_fname)
         self.readahead = readahead
+        self.loads = decoding_func
         # disabling readahead improves random read performance
 
         self.read_txn = self.make_read_transaction()
-        self.length = self._retrieve_item(b'__len__')
+
+        # attempt to retrieve stored db size
+        try:
+            length = self._retrieve_item(b'__len__')
+        except KeyError as e:
+            print(f"{e}")
+            length = None
+
+        self.length = length
+
+    def __len__(self):
+        if self.length is None:
+            raise ValueError("db length is unknown")
+        return self.length
+
+    def keys(self):
+        keys = self._retrieve_item(b'__keys__')
+        if self.length is None:
+            self.length = len(keys)
+        return keys
 
     def make_read_transaction(self):
         db = lmdb.open(
@@ -162,17 +182,14 @@ class LMDBData():
     def _retrieve_item(self, key):
         """this method is private and not user-facing, not customizable"""
         assert isinstance(key, (bytes, str)), f"{key} is not string or bytes"
+        orig_key = key
         if isinstance(key, str):
             key = key.encode("ascii")
         res = self.read_txn.get(key)
-        res = loads(res)
+        if res is None:
+            raise KeyError(f"key {orig_key} is not present in the lmdb")
+        res = self.loads(res)
         return res
-
-    def __len__(self):
-        return self.length
-
-    def keys(self):
-        return self._retrieve_item(b'__keys__')
 
 
 class ImageLMDB(LMDBData):
