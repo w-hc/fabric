@@ -20,6 +20,7 @@ in insertion order, but the insertion order != storage order.
 2. There should be a language neutral way to store bytes value unmodified,
 rather than wrapping bytes further in the pickle layer.
 """
+import logging
 from pathlib import Path
 import io
 import platform
@@ -27,7 +28,8 @@ import lmdb
 import pickle
 from PIL import Image
 from tqdm import tqdm
-from dataflow.utils import logger  # TODO: add a consistent logger for fabric itself
+# from dataflow.utils import logger  # TODO: add a consistent logger for fabric itself
+logger = logging.getLogger(__name__)
 
 dumps = lambda x: pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
 # loads = pickle.loads
