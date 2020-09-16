@@ -135,13 +135,6 @@ class Video():
         return frame
 
     def load_audio_frames(self, start_sec=None, end_sec=None):
-        self._confirm_container_opened()
-        if not self.meta.has_audio():
-            raise ValueError("no audio for this file")
-        start_sec, end_sec = check_start_end_time(
-            start_sec, end_sec, self.meta.audio['length_in_secs']
-        )
-
         if _AUDIO_LOAD_FROM_TRANSCODE:
             transcode_audio_fname = osp.splitext(self.fname)[0] + '.wav'
             if not osp.isfile(transcode_audio_fname):
@@ -151,6 +144,13 @@ class Video():
             )
             return adata, sr
         else:
+            self._confirm_container_opened()
+            if not self.meta.has_audio():
+                raise ValueError("no audio for this file")
+            start_sec, end_sec = check_start_end_time(
+                start_sec, end_sec, self.meta.audio['length_in_secs']
+            )
+
             container = self.container
 
             aframes = read_from_stream(
