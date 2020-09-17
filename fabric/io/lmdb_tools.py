@@ -53,6 +53,13 @@ def pillow_img_to_bytes(img, img_format='jpeg'):
     return value
 
 
+def encode_key_to_bytes(key):
+    assert isinstance(key, (bytes, str)), f"{key} is not string or bytes"
+    if isinstance(key, str):
+        key = key.encode("ascii")
+    return key
+
+
 def save_to_lmdb(db_fname, stream, write_frequency=5000):
     """
     Adapted from
@@ -103,7 +110,7 @@ def save_to_lmdb(db_fname, stream, write_frequency=5000):
         # although it has a context manager interface
         txn = db.begin(write=True)
         for idx, (k, v) in enumerate(stream):
-            k = str(k).encode('ascii')
+            k = encode_key_to_bytes(k)
             if k in existing_keys:
                 raise ValueError(f"key {k} is already used")
 
@@ -161,13 +168,47 @@ class LMDBData():
             self.length = len(keys)
         return keys
 
+    def __getitem__(self, key):
+        """this is public, and can be overwritten by children"""
+        return self._retrieve_item(key)
+
+    def _retrieve_item(self, key):
+        """this method is private and not user-facing, not customizable"""
+        key = encode_key_to_bytes(key)
+        res = self.read_txn.get(key)
+        if res is None:
+            raise KeyError(f"key {key} is not present in the lmdb")
+        res = self.loads(res)
+        return res
+
+    def read_range(self, start_key, end_key):
+        """[start_key, end_key) not the end is not inclusive"""
+        start_key = encode_key_to_bytes(start_key)
+        end_key = encode_key_to_bytes(end_key)
+
+        accu = []
+        with self.read_txn.cursor() as curs:
+            success = curs.set_key(start_key)
+            if not success:
+                raise KeyError(f"{start_key} is not present")
+            for k, v in curs:
+                if k == end_key:
+                    break
+                v = self.loads(v)
+                accu.append(v)
+        return accu
+
+    # the following three methods are to ensure that the class is
+    # safely picklable when copied to multiple processes e.g. by torch loader
+    # the key is that a transaction is not safe to pickle, and needs to be
+    # invalidated and then freshly created
     def make_read_transaction(self):
-        db = lmdb.open(
+        env = lmdb.open(
             self.db_fname, subdir=False, readonly=True, lock=False,
             readahead=self.readahead, map_size=1099511627776 * 2,
             max_readers=100
         )
-        txn = db.begin(write=False)
+        txn = env.begin(write=False, buffers=False)
         return txn
 
     def __getstate__(self):
@@ -185,22 +226,6 @@ class LMDBData():
         self.__dict__ = state
         self.read_txn = self.make_read_transaction()
 
-    def __getitem__(self, key):
-        """this is public, and can be customzized by children"""
-        return self._retrieve_item(key)
-
-    def _retrieve_item(self, key):
-        """this method is private and not user-facing, not customizable"""
-        assert isinstance(key, (bytes, str)), f"{key} is not string or bytes"
-        orig_key = key
-        if isinstance(key, str):
-            key = key.encode("ascii")
-        res = self.read_txn.get(key)
-        if res is None:
-            raise KeyError(f"key {orig_key} is not present in the lmdb")
-        res = self.loads(res)
-        return res
-
 
 class ImageLMDB(LMDBData):
     """
@@ -209,7 +234,18 @@ class ImageLMDB(LMDBData):
     When loading, convert the bytes to Image with a wrapper
     """
     def __getitem__(self, key):
-        bytes_data = super().__getitem__(key)
+        data = super().__getitem__(key)
+        data = self.convert_bytes_into_image(data)
+        return data
+
+    def read_range(self, start_key, end_key):
+        raise NotImplementedError()
+        accu = super().read_range(start_key, end_key)
+        # accu = [ self.convert_bytes_into_image(e) for e in accu ]
+        return accu
+
+    @classmethod
+    def convert_bytes_into_image(cls, bytes_data):
         buf = io.BytesIO()
         buf.write(bytes_data)
         buf.seek(0)
