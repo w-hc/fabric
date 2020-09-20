@@ -18,7 +18,7 @@ if WHOAMI == "ttic":
 elif WHOAMI == 'autobot':
     DEFAULT_PARTITION = 'long,short'
     GPU_REQ_FLAG = 'G'
-    MISC_SBATCH_OPT = '-x autobot-1-1'
+    MISC_SBATCH_OPT = ''
 else:
     raise ValueError('unregistered machine identifier {}'.format(WHOAMI))
 
