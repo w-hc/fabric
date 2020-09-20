@@ -65,7 +65,7 @@ def main():
     # chdir first. cfg import might assume relpath from launch dir
     # this statement must come after reading launch_cfg
     os.chdir(LAUNCH_DIR_ABSPATH)
-    group_name, cfg_name_2_maker = parse_launch_config(launch_config)
+    cfg_name_2_maker = parse_launch_config(launch_config)
 
     # if mocking, print requested configs and quit
     if args.mock is not None:
@@ -78,11 +78,11 @@ def main():
 
     # sow the cfgs
     # 1. check that group namd and launch dir name match
-    dir_name = LAUNCH_DIR_ABSPATH.split('/')[-1]
-    assert dir_name == group_name, \
-        "group name: {}, but launch dir name: {}. Match them"\
-        .format(group_name, dir_name)
-    del dir_name
+    # dir_name = LAUNCH_DIR_ABSPATH.split('/')[-1]
+    # assert dir_name == group_name, \
+    #     "group name: {}, but launch dir name: {}. Match them"\
+    #     .format(group_name, dir_name)
+    # del dir_name
 
     # 2. create exp folder and plant configs
     if not osp.isdir(RUN_DIR_NAME):
@@ -110,7 +110,7 @@ def main():
 def parse_launch_config(launch_config):
     validate_dict_fields(launch_config, _LAUNCH_FIELDS_SPEC)
     acc = {}
-    group_name = launch_config['group']
+    # group_name = launch_config['group']
 
     # import pudb
     # pudb.set_trace()
@@ -152,7 +152,7 @@ def parse_launch_config(launch_config):
         else:
             acc[part_name] = curr_maker
 
-    return group_name, acc
+    return acc
 
 
 def validate_dict_fields(src_dict, field_spec):
