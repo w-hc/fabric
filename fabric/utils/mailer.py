@@ -1,80 +1,40 @@
+import os
 import logging
-import functools
 from contextlib import contextmanager
 import traceback
 import smtplib
-from email.mime.text import MIMEText
+from email.message import EmailMessage
 
 logger = logging.getLogger(__name__)
 
 
-def send_email(subject, body, to):
+def send_email(
+    subject, body, to,
+    sender="warning@whc.is",
+):
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = to
+
+    # Send the message via our own SMTP server.
     s = smtplib.SMTP('localhost')
-    mime = MIMEText(body)
-    mime['Subject'] = subject
-    mime['To'] = to
-    s.sendmail('lab', to, mime.as_string())
+    s.send_message(msg)
+    s.quit()
 
 
 @contextmanager
-def warn_email(subject, address, do_send=True):
+def warn_email(to="whc@ttic.edu", subject=None, do_send=True):
+    """note that contextmanager can be used as a decorator as well"""
+    if subject is None:
+        subject = os.environ.get('SLURM_JOB_NAME', 'shell')
     try:
         yield
     except Exception as e:
-        logger.info("Exception triggered. Emailing {}".format(address))
+        logger.info(f"Exception triggered. Emailing {to}")
         if do_send:
-            send_email(
-                subject=subject, body=traceback.format_exc(), to=address
-            )
+            send_email(subject=subject, body=traceback.format_exc(), to=to)
         raise (e)
     finally:
         pass
-
-
-# class ExceptionEmail:
-#     """
-#     A decorator that sends a warning email when catching
-#     exceptions. The caught exception will be re-raised.
-#     """
-#     def __init__(self, subject, address, do_send=True):
-#         """
-#         Args:
-#             subject: title of the email; some identifying metadata
-#             address: mail recipient address
-#         """
-#         self.subject = subject
-#         self.address = address
-#         self.do_send = do_send  # used to ensure only main process send email
-
-#     def __call__(self, f):
-#         @functools.wraps(f)
-#         def ret(*args, **kwargs):
-#             try:
-#                 f(*args, **kwargs)
-#             # except KeyboardInterrupt:
-#             #     pass  # do not send email on sigint
-#             except Exception as e:
-#                 logger.info("Exception triggered. Emailing {}".format(self.address))
-#                 if self.do_send:
-#                     send_email(
-#                         subject=self.subject,
-#                         body=traceback.format_exc(),
-#                         to=self.address
-#                     )
-#                 raise(e)
-#         return ret
-
-
-# def _test():
-#     target = 'whc@ttic.edu'
-#     send_email('ttic.mailer sending test', 'this is a test', target)
-
-#     @ExceptionEmail('ttic.mailer decorator test', target)
-#     def bad_func():
-#         return 1 / 0
-
-#     bad_func()
-
-
-# if __name__ == '__main__':
-#     _test()
