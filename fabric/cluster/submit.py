@@ -11,9 +11,9 @@ JCMD = os.environ['JCMD']
 
 WHOAMI = os.environ.get('SELF', 'ttic')
 if WHOAMI == "ttic":
-    DEFAULT_PARTITION = 'greg-gpu,rc-own-gpu'
+    DEFAULT_PARTITION = 'greg-gpu'
     GPU_REQ_FLAG = 'c'
-    MISC_SBATCH_OPT = '-x gpu-g20,gpu-g26,gpu-g38'
+    MISC_SBATCH_OPT = '-x gpu-g20,gpu-g26'
     # EXCLUDE_NODES =
 elif WHOAMI == 'autobot':
     DEFAULT_PARTITION = 'long,short'
