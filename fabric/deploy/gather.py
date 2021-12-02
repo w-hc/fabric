@@ -27,7 +27,6 @@ class Gatherer():
         # the exp dir is parallel to the package
         self.exp_store_root = osp.join(_root, exp_root)
         self.deployed_in = 'runs'
-        self.where_to_look_within_each_exp = 'output'
 
     def path_to_subroot(self, subroot: str):
         return osp.join(self.exp_store_root, subroot)
@@ -44,7 +43,6 @@ class Gatherer():
 
     def collect(self, subroot: str, exp_name: str, processing_fn):
         path = self.path_to_exp(subroot, exp_name)
-        path = osp.join(path, self.where_to_look_within_each_exp)
         return processing_fn(path)
 
     def all_collect(self, subroot: str, processing_fn):
