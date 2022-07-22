@@ -117,7 +117,8 @@ class EventStorage():
 
     def close(self):
         self.flush_history()
-        self._file_handle.close()
+        if self.writable:
+            self._file_handle.close()
 
     def print_last(self):
         if len(self.history) > 0:
