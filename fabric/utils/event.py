@@ -90,6 +90,8 @@ class EventStorage():
     def put(self, key, val):
         key = self.full_key(key)
         assert isinstance(val, (int, float, str))
+        if isinstance(val, float):
+            val = round(val, 3)
         self.curr_buffer[key] = val
 
     def put_scalars(self, **kwargs):
