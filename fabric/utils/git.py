@@ -1,6 +1,7 @@
 import os
 import os.path as osp
 import subprocess
+from pathlib import Path
 
 
 def git_version(src_dir):
@@ -31,3 +32,8 @@ def git_version(src_dir):
 
     os.chdir(curr)
     return GIT_REVISION
+
+
+def self_version(fname):
+    dirname = Path(fname).resolve().parent
+    return git_version(dirname)
