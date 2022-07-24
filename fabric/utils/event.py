@@ -73,7 +73,6 @@ class EventStorage():
 
         on_flush_period = self.ticker.tick()
         if on_flush_period:
-            print("flushing")
             self.flush_history()
 
         self.iter += 1
