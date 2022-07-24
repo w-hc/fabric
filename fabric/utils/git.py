@@ -37,3 +37,15 @@ def git_version(src_dir):
 def self_version(fname):
     dirname = Path(fname).resolve().parent
     return git_version(dirname)
+
+
+def tag_version(fname, output_dir="./"):
+    sha = self_version(fname)
+    if output_dir is not None:
+        output_dir = Path(output_dir)
+        if not output_dir.is_dir():
+            output_dir.mkdir(parents=True, exist_ok=True)
+        v_fname = output_dir / 'git_version'
+        with open(v_fname, "w") as f:
+            f.write(sha)
+    return sha
