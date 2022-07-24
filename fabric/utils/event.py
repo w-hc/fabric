@@ -6,6 +6,7 @@ import pickle
 from contextlib import contextmanager
 
 from .timer import Timer
+from .heartbeat import IntervalTicker
 from ..io import save_object, load_object
 
 logger = logging.getLogger(__name__)
@@ -45,15 +46,16 @@ def read_lined_json(fname):
 
 
 class EventStorage():
-    def __init__(self, output_dir=None, start_iter=0, flush_period=50):
+    def __init__(self, output_dir="./", start_iter=0, flush_period=60):
         self.iter = start_iter
-        self.flush_period = flush_period
+        self.ticker = IntervalTicker(flush_period)
         self.history = []
         self._current_prefix = ""
         self._init_curr_buffer_()
 
         self.writable = False
         if output_dir is not None:
+
             output_dir = Path(output_dir)
             if not output_dir.is_dir():
                 output_dir.mkdir(parents=True, exist_ok=True)
@@ -68,7 +70,10 @@ class EventStorage():
 
     def step(self):
         self.history.append(self.curr_buffer)
-        if (self.iter + 1) % self.flush_period == 0:
+
+        on_flush_period = self.ticker.tick()
+        if on_flush_period:
+            print("flushing")
             self.flush_history()
 
         self.iter += 1

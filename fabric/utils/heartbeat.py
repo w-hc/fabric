@@ -7,6 +7,23 @@ from inspect import stack
 _CURRENT_BEAT_STACK = []
 
 
+class IntervalTicker():
+    def __init__(self, interval=60):
+        self.interval = timedelta(seconds=interval)
+        self.last_tick = datetime.now()
+        self.now = self.last_tick
+
+    def tick(self):
+        self.now = datetime.now()
+        if (self.now - self.last_tick) > self.interval:
+            self.last_tick = self.now
+            return True
+
+    def tick_str(self):
+        return self.now.isoformat(timespec='seconds')
+
+
+
 def get_heartbeat():
     """
     Returns:
@@ -39,38 +56,32 @@ class HeartBeat():
     ):
         self.pbar = pbar
         self.fname = Path(output_dir) / fname
-        self.write_interval = timedelta(seconds=write_interval)
-        self.last_write = datetime.now()
+        self.ticker = IntervalTicker(write_interval)
         self.completed = False
 
         # force one write at the beginning
         self.beat(force_write=True, n_stack_up=2)
 
     def beat(self, force_write=False, n_stack_up=1):
-        now = datetime.now()
-
-        if force_write or (now - self.last_write) > self.write_interval:
-            stats = self.stats(now)
+        on_write_period = self.ticker.tick()
+        if force_write or on_write_period:
+            stats = self.stats()
             stats['caller'] = caller_info(n_stack_up)
 
             with open(self.fname, "w") as f:
                 json.dump(stats, f)
 
-            self.last_write = now
-
     def done(self):
         self.completed = True
         self.beat(force_write=True, n_stack_up=2)
 
-    def stats(self, now):
-        # data = self.pbar.format_dict
-        tick = now.isoformat(timespec='seconds')
+    def stats(self):
         stats = {
-            "beat": tick,
+            "beat": self.ticker.tick_str(),
             "done": self.completed,
             "meter": get_tqdm_meter(self.pbar)
         }
-        return  stats
+        return stats
 
     def __enter__(self):
         _CURRENT_BEAT_STACK.append(self)
