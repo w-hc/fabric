@@ -2,13 +2,12 @@ import logging
 from pathlib import Path
 import json
 import os
-import pickle
 from contextlib import contextmanager
-import imageio
 
-from .timer import Timer
 from .heartbeat import IntervalTicker
-from ..io import save_object, load_object
+
+# import pickle
+# from ..io import save_object, load_object
 
 logger = logging.getLogger(__name__)
 
@@ -78,11 +77,11 @@ class EventStorage():
     def _init_curr_buffer_(self):
         self.curr_buffer = {'iter': self.iter}
 
-    def step(self):
+    def step(self, flush=False):
         self.history.append(self.curr_buffer)
 
         on_flush_period = self.ticker.tick()
-        if on_flush_period:
+        if flush or on_flush_period:
             self.flush_history()
 
         self.iter += 1
@@ -133,12 +132,28 @@ class EventStorage():
     #         key, f"{key}.pkl"
     #     )
 
-    def put_image(self, key, img):
-        img_dir = "images"
-        os.makedirs(self.output_dir / img_dir, exist_ok=True)
-        fname = f"{img_dir}/step_{self.iter}_{key}.png"
-        imageio.imwrite(self.output_dir / fname, img)
+    def tag_artifact(self, key, ext=None):
+        os.makedirs(self.output_dir / key, exist_ok=True)
+        fname = self.output_dir / key / f"step_{self.iter}"
+        if ext:
+            fname = f"{fname}.{ext}"
         self.put(key, fname)
+        return fname
+
+    # def put_image(self, key, img):
+    #     img_dir = "images"
+    #     os.makedirs(self.output_dir / img_dir, exist_ok=True)
+    #     fname = f"{img_dir}/step_{self.iter}_{key}.png"
+    #     imageio.imwrite(self.output_dir / fname, img)
+    #     self.put(key, fname)
+
+    # def put_torch_ckpt(self, state):
+    #     import torch
+    #     ckpt_dir = "ckpt"
+    #     os.makedirs(self.output_dir / ckpt_dir, exist_ok=True)
+    #     fname = f"{ckpt_dir}/step_{self.iter}_ckpt.pt"
+    #     torch.save(state, fname)
+    #     self.put("ckpt", fname)
 
     def close(self):
         self.flush_history()
