@@ -46,6 +46,15 @@ def read_lined_json(fname):
     return accu
 
 
+def read_stats(dirname, key):
+    fname = dirname / "history.json"
+    stats = read_lined_json(fname)
+    stats = list_filter_items(stats, lambda x: key in x)
+    xs = [e['iter'] for e in stats]
+    ys = [e[key] for e in stats]
+    return xs, ys
+
+
 class EventStorage():
     def __init__(self, output_dir="./", start_iter=0, flush_period=60):
         self.iter = start_iter
