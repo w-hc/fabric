@@ -1,9 +1,10 @@
 import logging
 from pathlib import Path
 import json
-import os.path as osp
+import os
 import pickle
 from contextlib import contextmanager
+import imageio
 
 from .timer import Timer
 from .heartbeat import IntervalTicker
@@ -102,24 +103,33 @@ class EventStorage():
         for k, v in kwargs.items():
             self.put(k, v)
 
-    def put_artifact(self, exec_f, key, fname=None):
-        """
-        this applies to all saves, including model ckpts
-        exec_f: a function that takes a fname as input
-        """
-        if not self.writable:
-            return
-        if fname is None:
-            fname = key
-        abs_fname = self.output_dir / f"step_{self.iter}_{fname}"
-        exec_f(str(abs_fname))
-        self.put(key, abs_fname.name)
+    # def put_artifact(self, exec_f, key, dirname, fname=None):
+    #     """
+    #     this applies to all saves, including model ckpts
+    #     exec_f: a function that takes a fname as input
+    #     """
+    #     raise NotImplementedError()
+    #     if not self.writable:
+    #         return
+    #     if fname is None:
+    #         fname = key
+    #     abs_fname = self.output_dir / f"step_{self.iter}_{fname}"
+    #     exec_f(str(abs_fname))
+    #     self.put(key, abs_fname.name)
 
-    def put_pickled(self, key, obj):
-        self.put_artifact(
-            lambda fn: save_object(obj, fn),
-            key, f"{key}.pkl"
-        )
+    # def put_pickled(self, key, obj):
+    #     raise NotImplementedError()
+    #     self.put_artifact(
+    #         lambda fn: save_object(obj, fn),
+    #         key, f"{key}.pkl"
+    #     )
+
+    def put_image(self, key, img):
+        img_dir = "images"
+        os.makedirs(self.output_dir / img_dir, exist_ok=True)
+        fname = f"{img_dir}/step_{self.iter}_{key}.png"
+        imageio.imwrite(self.output_dir / fname, img)
+        self.put(key, fname)
 
     def close(self):
         self.flush_history()
