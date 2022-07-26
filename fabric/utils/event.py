@@ -46,7 +46,9 @@ def read_lined_json(fname):
 
 
 def read_stats(dirname, key):
-    fname = dirname / "history.json"
+    fname = Path(dirname / "history.json")
+    if not fname.is_file():
+        return [], []
     stats = read_lined_json(fname)
     stats = list_filter_items(stats, lambda x: key in x)
     xs = [e['iter'] for e in stats]
