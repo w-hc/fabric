@@ -62,17 +62,18 @@ class EventStorage():
         self._current_prefix = ""
         self._init_curr_buffer_()
 
+        self.output_dir = output_dir
         self.writable = False
-        if output_dir is not None:
 
-            output_dir = Path(output_dir)
+    def _open(self):
+        if self.writable:
+            output_dir = Path(self.output_dir)
             if not output_dir.is_dir():
                 output_dir.mkdir(parents=True, exist_ok=True)
             json_fname = output_dir / 'history.json'
 
-            self.output_dir = output_dir
             self._file_handle = json_fname.open('a')
-            self.writable = True
+            self.output_dir = output_dir  # make sure it's a path object
 
     def _init_curr_buffer_(self):
         self.curr_buffer = {'iter': self.iter}
@@ -111,19 +112,19 @@ class EventStorage():
         for k, v in kwargs.items():
             self.put(k, v)
 
-    # def put_artifact(self, exec_f, key, dirname, fname=None):
-    #     """
-    #     this applies to all saves, including model ckpts
-    #     exec_f: a function that takes a fname as input
-    #     """
-    #     raise NotImplementedError()
-    #     if not self.writable:
-    #         return
-    #     if fname is None:
-    #         fname = key
-    #     abs_fname = self.output_dir / f"step_{self.iter}_{fname}"
-    #     exec_f(str(abs_fname))
-    #     self.put(key, abs_fname.name)
+    def put_artifact(self, key, ext, save_func):
+        if not self.writable:
+            return
+        os.makedirs(self.output_dir / key, exist_ok=True)
+        fname = (self.output_dir / key / f"step_{self.iter}").with_suffix(ext)
+        fname = str(fname)
+
+        # must be called inside so that
+        # 1. the func is not executed if the metric is not writable
+        # 2. the key is only inserted if the func succeeds
+        save_func(fname)
+        self.put(key, fname)
+        return fname
 
     # def put_pickled(self, key, obj):
     #     raise NotImplementedError()
@@ -131,29 +132,6 @@ class EventStorage():
     #         lambda fn: save_object(obj, fn),
     #         key, f"{key}.pkl"
     #     )
-
-    def tag_artifact(self, key, ext=None):
-        os.makedirs(self.output_dir / key, exist_ok=True)
-        fname = self.output_dir / key / f"step_{self.iter}"
-        if ext:
-            fname = f"{fname}.{ext}"
-        self.put(key, fname)
-        return fname
-
-    # def put_image(self, key, img):
-    #     img_dir = "images"
-    #     os.makedirs(self.output_dir / img_dir, exist_ok=True)
-    #     fname = f"{img_dir}/step_{self.iter}_{key}.png"
-    #     imageio.imwrite(self.output_dir / fname, img)
-    #     self.put(key, fname)
-
-    # def put_torch_ckpt(self, state):
-    #     import torch
-    #     ckpt_dir = "ckpt"
-    #     os.makedirs(self.output_dir / ckpt_dir, exist_ok=True)
-    #     fname = f"{ckpt_dir}/step_{self.iter}_ckpt.pt"
-    #     torch.save(state, fname)
-    #     self.put("ckpt", fname)
 
     def close(self):
         self.flush_history()
@@ -183,12 +161,25 @@ class EventStorage():
         self._current_prefix = old_prefix
 
     def __enter__(self):
+        if len(_CURRENT_STORAGE_STACK) > 0:
+            parent = _CURRENT_STORAGE_STACK[-1]
+            root, dirname = parent.output_dir, self.output_dir
+            if root is not None and dirname is not None:
+                child_dir = parent.output_dir / f"{self.output_dir}_{parent.iter}"
+                self.output_dir = child_dir
+                parent.put(str(dirname), str(child_dir))
+
+        if self.output_dir is not None:
+            self.writable = True
+            self._open()
+
         _CURRENT_STORAGE_STACK.append(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert _CURRENT_STORAGE_STACK[-1] == self
         _CURRENT_STORAGE_STACK.pop()
+        self.close()
 
 
 def test_storage():
