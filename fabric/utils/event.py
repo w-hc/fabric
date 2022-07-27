@@ -1,15 +1,9 @@
-import logging
 from pathlib import Path
 import json
 import os
 from contextlib import contextmanager
 
 from .heartbeat import IntervalTicker
-
-# import pickle
-# from ..io import save_object, load_object
-
-logger = logging.getLogger(__name__)
 
 
 _CURRENT_STORAGE_STACK = []
@@ -46,8 +40,7 @@ def read_lined_json(fname):
 
 
 def read_stats(dirname, key):
-    fname = Path(dirname / "history.json")
-    if not fname.is_file():
+    if dirname is None or not (fname := Path(dirname) / "history.json").is_file():
         return [], []
     stats = read_lined_json(fname)
     stats = list_filter_items(stats, lambda x: key in x)
@@ -128,27 +121,15 @@ class EventStorage():
         self.put(key, fname)
         return fname
 
-    # def put_pickled(self, key, obj):
-    #     raise NotImplementedError()
-    #     self.put_artifact(
-    #         lambda fn: save_object(obj, fn),
-    #         key, f"{key}.pkl"
-    #     )
-
     def close(self):
         self.flush_history()
         if self.writable:
             self._file_handle.close()
 
-    def print_last(self):
+    def get_last(self):
         if len(self.history) > 0:
             last = self.history[-1]
-            last = {
-                k: round(v, 3)
-                if isinstance(v, float) else v
-                for k, v in last.items()
-            }
-            logger.info(last)
+            return last
 
     @contextmanager
     def name_scope(self, name):
@@ -182,39 +163,3 @@ class EventStorage():
         assert _CURRENT_STORAGE_STACK[-1] == self
         _CURRENT_STORAGE_STACK.pop()
         self.close()
-
-
-def test_storage():
-    # import os
-    # output_dir = Path(Path(os.getcwd()) / "out")
-
-    # history = read_lined_json(output_dir / "history.json")
-    # for item in history:
-    #     if 'eval_test' in item:
-    #         print(item['iter'])
-    #         fname = item['eval_test']
-    #         a = load_object(output_dir / fname)
-
-    # # print(len(a))
-    # return
-    storage = EventStorage()
-    for i in range(100):
-        storage.put_scalars(
-            loss=i, loss_R=i * 2, lr=0.01
-        )
-        # if (i + 1) % 50 == 0:
-        #     arr = np.random.randn(100, 10)
-        #     storage.put_artifact("pred", arr)
-        storage.step()
-    storage.close()
-
-
-def main():
-    event = EventStorage("./")
-    fname = event.get_store_path("model.ckpt")
-    torch.save(fname, "asdf")
-    event.put("ckpt", fname.name)
-
-
-if __name__ == '__main__':
-    test_storage()
