@@ -7,12 +7,7 @@ setup(
     author_email='whc@uchicago.edu',
     packages=find_packages(),
     python_requires='>=3',
-    install_requires=[
-        # note that these requirements may not be exhaustive
-        'pyyaml',
-        'numpy',
-        'torch',
-    ],
+    install_requires=[],
     package_data={
         # If any package contains *.yml, include them:
         '': ['*.yml'],
