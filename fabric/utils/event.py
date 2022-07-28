@@ -21,12 +21,6 @@ def get_event_storage():
     return _CURRENT_STORAGE_STACK[-1]
 
 
-def list_filter_items(inputs, func):
-    for item in inputs:
-        if func(item):
-            yield item
-
-
 def read_lined_json(fname):
     with Path(fname).open('r') as f:
         for line in f:
@@ -38,8 +32,7 @@ def read_stats(dirname, key):
     if dirname is None or not (fname := Path(dirname) / "history.json").is_file():
         return [], []
     stats = read_lined_json(fname)
-    stats = list_filter_items(stats, lambda x: key in x)
-    stats = list(stats)  # force the iterator
+    stats = list(filter(lambda x: key in x, stats))
     xs = [e['iter'] for e in stats]
     ys = [e[key] for e in stats]
     return xs, ys
