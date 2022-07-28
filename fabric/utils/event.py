@@ -22,21 +22,16 @@ def get_event_storage():
 
 
 def list_filter_items(inputs, func):
-    accu = []
     for item in inputs:
         if func(item):
-            accu.append(item)
-    return accu
+            yield item
 
 
 def read_lined_json(fname):
     with Path(fname).open('r') as f:
-        lines = f.readlines()
-    accu = []
-    for li in lines:
-        item = json.loads(li)
-        accu.append(item)
-    return accu
+        for line in f:
+            item = json.loads(line)
+            yield item
 
 
 def read_stats(dirname, key):
@@ -44,6 +39,7 @@ def read_stats(dirname, key):
         return [], []
     stats = read_lined_json(fname)
     stats = list_filter_items(stats, lambda x: key in x)
+    stats = list(stats)  # force the iterator
     xs = [e['iter'] for e in stats]
     ys = [e[key] for e in stats]
     return xs, ys
