@@ -16,6 +16,7 @@ setup(
         'console_scripts': [
             'smit=fabric.cluster.submit:main',
             'sow=fabric.deploy.sow:main',
+            'gvlist=fabric.utils.git:list_subdirs_versions'
         ]
     },
     zip_safe=False  # accessing config files without using pkg_resources.
