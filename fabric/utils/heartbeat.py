@@ -23,7 +23,6 @@ class IntervalTicker():
         return self.now.isoformat(timespec='seconds')
 
 
-
 def get_heartbeat():
     """
     Returns:
@@ -90,8 +89,6 @@ class HeartBeat():
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert _CURRENT_BEAT_STACK[-1] == self
         _CURRENT_BEAT_STACK.pop()
-        self.done()
-
 
 
 """
