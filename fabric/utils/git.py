@@ -4,6 +4,9 @@ import subprocess
 from pathlib import Path
 
 
+TAG_FNAME = "git_version"
+
+
 def git_version(src_dir):
     curr = os.getcwd()
     assert osp.isdir(src_dir), '{} is not a valid dir'.format(src_dir)
@@ -45,7 +48,26 @@ def tag_version(fname, output_dir="./"):
         output_dir = Path(output_dir)
         if not output_dir.is_dir():
             output_dir.mkdir(parents=True, exist_ok=True)
-        v_fname = output_dir / 'git_version'
+        v_fname = output_dir / TAG_FNAME
         with open(v_fname, "w") as f:
             f.write(sha)
     return sha
+
+
+def list_subdirs_versions():
+    first_k = 6
+
+    root = Path.cwd()
+    data = []
+    for p in root.iterdir():
+        if p.is_dir():
+            v_fname = p / TAG_FNAME
+            if v_fname.is_file():
+                with v_fname.open("r") as f:
+                    tag = f.read().strip()
+                    data.append([p.name, tag[:first_k]])
+
+    data = sorted(data)
+    # print(tabulate(data, tablefmt="tsv"))
+    for (key, tag) in data:
+        print(key, tag, sep=",")

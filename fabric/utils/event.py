@@ -1,14 +1,9 @@
-import logging
 from pathlib import Path
 import json
-import os.path as osp
-import pickle
+import os
 from contextlib import contextmanager
 
-from .timer import Timer
-from ..io import save_object, load_object
-
-logger = logging.getLogger(__name__)
+from .heartbeat import IntervalTicker
 
 
 _CURRENT_STORAGE_STACK = []
@@ -26,49 +21,52 @@ def get_event_storage():
     return _CURRENT_STORAGE_STACK[-1]
 
 
-def list_filter_items(inputs, func):
-    accu = []
-    for item in inputs:
-        if func(item):
-            accu.append(item)
-    return accu
-
-
 def read_lined_json(fname):
     with Path(fname).open('r') as f:
-        lines = f.readlines()
-    accu = []
-    for li in lines:
-        item = json.loads(li)
-        accu.append(item)
-    return accu
+        for line in f:
+            item = json.loads(line)
+            yield item
+
+
+def read_stats(dirname, key):
+    if dirname is None or not (fname := Path(dirname) / "history.json").is_file():
+        return [], []
+    stats = read_lined_json(fname)
+    stats = list(filter(lambda x: key in x, stats))
+    xs = [e['iter'] for e in stats]
+    ys = [e[key] for e in stats]
+    return xs, ys
 
 
 class EventStorage():
-    def __init__(self, output_dir=None, start_iter=0, flush_period=50):
+    def __init__(self, output_dir="./", start_iter=0, flush_period=60):
         self.iter = start_iter
-        self.flush_period = flush_period
+        self.ticker = IntervalTicker(flush_period)
         self.history = []
         self._current_prefix = ""
         self._init_curr_buffer_()
 
+        self.output_dir = output_dir
         self.writable = False
-        if output_dir is not None:
-            output_dir = Path(output_dir)
+
+    def _open(self):
+        if self.writable:
+            output_dir = Path(self.output_dir)
             if not output_dir.is_dir():
                 output_dir.mkdir(parents=True, exist_ok=True)
             json_fname = output_dir / 'history.json'
 
-            self.output_dir = output_dir
             self._file_handle = json_fname.open('a')
-            self.writable = True
+            self.output_dir = output_dir  # make sure it's a path object
 
     def _init_curr_buffer_(self):
         self.curr_buffer = {'iter': self.iter}
 
-    def step(self):
+    def step(self, flush=False):
         self.history.append(self.curr_buffer)
-        if (self.iter + 1) % self.flush_period == 0:
+
+        on_flush_period = self.ticker.tick()
+        if flush or on_flush_period:
             self.flush_history()
 
         self.iter += 1
@@ -98,39 +96,29 @@ class EventStorage():
         for k, v in kwargs.items():
             self.put(k, v)
 
-    def put_artifact(self, exec_f, key, fname=None):
-        """
-        this applies to all saves, including model ckpts
-        exec_f: a function that takes a fname as input
-        """
+    def put_artifact(self, key, ext, save_func):
         if not self.writable:
             return
-        if fname is None:
-            fname = key
-        abs_fname = self.output_dir / f"step_{self.iter}_{fname}"
-        exec_f(str(abs_fname))
-        self.put(key, abs_fname.name)
+        os.makedirs(self.output_dir / key, exist_ok=True)
+        fname = (self.output_dir / key / f"step_{self.iter}").with_suffix(ext)
+        fname = str(fname)
 
-    def put_pickled(self, key, obj):
-        self.put_artifact(
-            lambda fn: save_object(obj, fn),
-            key, f"{key}.pkl"
-        )
+        # must be called inside so that
+        # 1. the func is not executed if the metric is not writable
+        # 2. the key is only inserted if the func succeeds
+        save_func(fname)
+        self.put(key, fname)
+        return fname
 
     def close(self):
         self.flush_history()
         if self.writable:
             self._file_handle.close()
 
-    def print_last(self):
+    def get_last(self):
         if len(self.history) > 0:
             last = self.history[-1]
-            last = {
-                k: round(v, 3)
-                if isinstance(v, float) else v
-                for k, v in last.items()
-            }
-            logger.info(last)
+            return last
 
     @contextmanager
     def name_scope(self, name):
@@ -145,45 +133,22 @@ class EventStorage():
         self._current_prefix = old_prefix
 
     def __enter__(self):
+        if len(_CURRENT_STORAGE_STACK) > 0:
+            parent = _CURRENT_STORAGE_STACK[-1]
+            root, dirname = parent.output_dir, self.output_dir
+            if root is not None and dirname is not None:
+                child_dir = parent.output_dir / f"{self.output_dir}_{parent.iter}"
+                self.output_dir = child_dir
+                parent.put(str(dirname), str(child_dir))
+
+        if self.output_dir is not None:
+            self.writable = True
+            self._open()
+
         _CURRENT_STORAGE_STACK.append(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert _CURRENT_STORAGE_STACK[-1] == self
         _CURRENT_STORAGE_STACK.pop()
-
-
-def test_storage():
-    # import os
-    # output_dir = Path(Path(os.getcwd()) / "out")
-
-    # history = read_lined_json(output_dir / "history.json")
-    # for item in history:
-    #     if 'eval_test' in item:
-    #         print(item['iter'])
-    #         fname = item['eval_test']
-    #         a = load_object(output_dir / fname)
-
-    # # print(len(a))
-    # return
-    storage = EventStorage()
-    for i in range(100):
-        storage.put_scalars(
-            loss=i, loss_R=i * 2, lr=0.01
-        )
-        # if (i + 1) % 50 == 0:
-        #     arr = np.random.randn(100, 10)
-        #     storage.put_artifact("pred", arr)
-        storage.step()
-    storage.close()
-
-
-def main():
-    event = EventStorage("./")
-    fname = event.get_store_path("model.ckpt")
-    torch.save(fname, "asdf")
-    event.put("ckpt", fname.name)
-
-
-if __name__ == '__main__':
-    test_storage()
+        self.close()
