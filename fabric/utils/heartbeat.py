@@ -35,10 +35,10 @@ def get_heartbeat():
     return _CURRENT_BEAT_STACK[-1]
 
 
-def get_tqdm_meter(pbar):
-    data = pbar.format_dict
-    data['bar_format'] = "{r_bar}"
-    meter_str = pbar.format_meter(**data)
+def get_tqdm_meter(pbar, format_dict):
+    format_dict['bar_format'] = "{r_bar}"
+    meter_str = pbar.format_meter(**format_dict)
+    meter_str = meter_str[2:]
     return meter_str
 
 
@@ -75,10 +75,13 @@ class HeartBeat():
         self.beat(force_write=True, n_stack_up=2)
 
     def stats(self):
+        pbar = self.pbar
+        fdict = pbar.format_dict
         stats = {
             "beat": self.ticker.tick_str(),
             "done": self.completed,
-            "meter": get_tqdm_meter(self.pbar)
+            "meter": get_tqdm_meter(pbar, fdict),
+            "elapsed": int(fdict['elapsed'])
         }
         return stats
 
