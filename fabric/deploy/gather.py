@@ -12,20 +12,12 @@ class Gatherer():
     '''
     a gatherer that expects a sow style experiment folder layout
     '''
-    def __init__(self, research_project_cls=None, exp_root='exp'):
+    def __init__(self, exp_root):
         '''
         Args:
-            research_project_cls: the class of the research project.
-                                    Assuming you did editable installation
             exp_root: the root of experiment folder within project folder
         '''
-        if research_project_cls is None:
-            _root = ''
-        else:
-            package_path = research_project_cls.__path__[0]
-            _root = osp.dirname(package_path)
-        # the exp dir is parallel to the package
-        self.exp_store_root = osp.join(_root, exp_root)
+        self.exp_store_root = osp.join(exp_root)
         self.deployed_in = 'runs'
 
     def path_to_subroot(self, subroot: str):
