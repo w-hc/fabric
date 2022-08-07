@@ -50,7 +50,7 @@ def caller_info(n_stack_up):
 
 class HeartBeat():
     def __init__(
-        self, pbar, write_interval=60,
+        self, pbar, write_interval=10,
         output_dir="./", fname="heartbeat.json"
     ):
         self.pbar = pbar
