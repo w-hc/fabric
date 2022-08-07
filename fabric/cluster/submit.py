@@ -13,7 +13,7 @@ WHOAMI = os.environ.get('SELF', 'ttic')
 if WHOAMI == "ttic":
     DEFAULT_PARTITION = 'greg-gpu'
     GPU_REQ_FLAG = 'c'
-    MISC_SBATCH_OPT = '-x gpu-g20,gpu-g26'
+    MISC_SBATCH_OPT = '-x gpu-g20'
     # EXCLUDE_NODES =
 elif WHOAMI == 'autobot':
     DEFAULT_PARTITION = 'long,short'
@@ -33,6 +33,7 @@ SBATCH_CMD = (
     '{misc} {extra} '
     '--output="{log}" '
     '--open-mode=append '
+    '--export=ALL,IS_REMOTE=1 '
     '"{script}" '
 )
 
