@@ -14,7 +14,7 @@ def SingleOrList(inner_type):
     return Union[inner_type, List[inner_type]]
 
 
-def optional_load_config(fname="config.yaml"):
+def optional_load_config(fname="config.yml"):
     cfg = {}
     conf_fname = Path.cwd() / fname
     if conf_fname.is_file():
@@ -26,7 +26,7 @@ def optional_load_config(fname="config.yaml"):
     return cfg
 
 
-def write_full_config(cfg_obj, fname="full_config.yaml"):
+def write_full_config(cfg_obj, fname="full_config.yml"):
     cfg = cfg_obj.dict()
     with (Path.cwd() / fname).open("w") as f:
         yaml.safe_dump(cfg, f, sort_keys=False)
