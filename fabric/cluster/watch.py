@@ -94,7 +94,7 @@ def bind_records(jobs):
     return records
 
 
-def survey(interval=5):
+def survey(interval=5, drop_on_done=False):
     from time import sleep
     from datetime import timedelta
 
@@ -110,12 +110,13 @@ def survey(interval=5):
                     with hbeat.open("r") as f:
                         info = json.load(f)
 
-                    if info['done']:
-                        conn.drop_row(jname)
-                        continue
-
                     for k in info.keys():
                         conn.update(jname, k, info[k])
+
+                    if info['done']:
+                        if drop_on_done:
+                            conn.drop_row(jname)
+                        continue
 
                     if timedelta(seconds=info['elapsed']) > timedelta(hours=3, minutes=50):
                         conn.update(jname, "todo", 1)
