@@ -7,7 +7,6 @@ from .watch import Record, ConnWrapper, open_db
 
 
 VALID_ACTS = ('run', 'cancel')
-CANCEL_CMD = 'scancel -n {name}'
 DEFAULT_PARTITION = 'greg-gpu'
 
 
@@ -138,6 +137,6 @@ def period_watch(interval):
                     elif todo == 2:
                         sbatch_cancel(jname)
                         conn.drop_row(jname)
-                conn.update(jname, "todo", 0)
+                    conn.update(jname, "todo", 0)
             conn.commit()
             sleep(interval)
