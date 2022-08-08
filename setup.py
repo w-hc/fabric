@@ -14,7 +14,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'smit=fabric.cluster.submit:main',
+            'smit=fabric.cluster.smit2:main',
             'sow=fabric.deploy.sow:main',
             'gvlist=fabric.utils.git:list_subdirs_versions'
         ]
