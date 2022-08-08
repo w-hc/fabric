@@ -107,8 +107,14 @@ def survey(interval=5, drop_on_done=False):
                 jname = r.name
                 hbeat = Path(r.path) / "heartbeat.json"
                 if hbeat.is_file():
-                    with hbeat.open("r") as f:
-                        info = json.load(f)
+                    try:
+                        with hbeat.open("r") as f:
+                            info = json.load(f)
+                    except Exception as e:
+                        # concurrent NFS read-write might cause erroneous input
+                        # just wait till next round
+                        print(str(e))
+                        continue
 
                     for k in info.keys():
                         conn.update(jname, k, info[k])
