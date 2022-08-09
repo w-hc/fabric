@@ -6,10 +6,9 @@ import click
 @click.command()
 @click.option("-a", "--action")
 @click.option("-i", "--interval", default=5)
-@click.option("--drop_done", default=False)
-def main(action, interval, drop_done):
+def main(action, interval):
     if action == "survey":
-        survey(interval, drop_done)
+        survey(interval)
     elif action == "update":
         period_watch(interval)
     else:

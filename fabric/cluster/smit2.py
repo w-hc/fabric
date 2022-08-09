@@ -124,10 +124,14 @@ def sbatch_cancel(jname):
 
 def period_watch(interval):
     from time import sleep
+    from tqdm import tqdm
+
     with open_db() as conn:
         conn = ConnWrapper(conn)
+        pbar = tqdm()
+
         while True:
-            print("updating jobs")
+            pbar.update()
             jobs = conn.get_all_jobs()
             for j in jobs:
                 jname, todo = j.name, j.todo

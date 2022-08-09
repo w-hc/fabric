@@ -45,7 +45,7 @@ class ConnWrapper():
         records = bind_records(res)
         return records
 
-    def insert(self, records):
+    def insert(self, records, dbname="jobs"):
         with self.conn.cursor() as cur:
             for row in records:
                 data = row.dict()
@@ -53,7 +53,7 @@ class ConnWrapper():
                 key_fields = str(keys).replace('\'', "\"")  # terrible
                 vals = list(data.values())
                 template = f"""
-                    INSERT INTO "public"."jobs"
+                    INSERT INTO "public"."{dbname}"
                     {key_fields}
                     VALUES
                     ({("%s, " * len(vals))[:-2]});
@@ -94,17 +94,25 @@ def bind_records(jobs):
     return records
 
 
-def survey(interval=5, drop_on_done=False):
+def survey(interval=5):
     from time import sleep
     from datetime import timedelta
+    from tqdm import tqdm
 
     with open_db() as conn:
         conn = ConnWrapper(conn)
+        pbar = tqdm()
         while True:
-            print("surverying")
+            pbar.update()
+
             records = conn.get_all_jobs()
             for r in records:
                 jname = r.name
+                if r.done:
+                    conn.drop_row(jname)
+                    conn.insert([r], "done")
+                    continue
+
                 hbeat = Path(r.path) / "heartbeat.json"
                 if hbeat.is_file():
                     try:
@@ -118,11 +126,6 @@ def survey(interval=5, drop_on_done=False):
 
                     for k in info.keys():
                         conn.update(jname, k, info[k])
-
-                    if info['done']:
-                        if drop_on_done:
-                            conn.drop_row(jname)
-                        continue
 
                     if timedelta(seconds=info['elapsed']) > timedelta(hours=3, minutes=50):
                         conn.update(jname, "todo", 1)
