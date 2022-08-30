@@ -11,7 +11,7 @@
 
 #SBATCH --export=ALL,IS_REMOTE=1
 
-#SBATCH {extra}
+#SBATCH -x gpu-g24 {extra}
 
 cd {task_dirname}
 
