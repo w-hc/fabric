@@ -389,6 +389,12 @@ class NodeTracer():
             else:
                 raise ValueError("{} is not a container node".format(self.pointed))
         else:
+            val_type = type(self.parent[self.child_token])
+            # coerce type consistency
+            if val_type == list:
+                arg = eval(arg)  # ugly hack
+            else:
+                arg = val_type(arg)
             self.parent[self.child_token] = arg
 
     def delete(self, objs):
