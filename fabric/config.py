@@ -35,7 +35,7 @@ def write_full_config(cfg_obj, fname="full_config.yml"):
         yaml.safe_dump(cfg, f, sort_keys=False)
 
 
-def argparse_cfg_template(cfg_class):
+def argparse_cfg_template(curr_cfgs):
     parser = argparse.ArgumentParser(description='Manual spec of configs')
     _, args = parser.parse_known_args()
     clauses = []
@@ -44,9 +44,7 @@ def argparse_cfg_template(cfg_class):
         clauses.append({args[i][2:]: args[i+1]})
     print(f"cmdline clauses: {clauses}")
 
-    defaults = cfg_class().dict()
-    # print(defaults)
-    maker = ConfigMaker(defaults)
+    maker = ConfigMaker(curr_cfgs)
     for clu in clauses:
         maker.execute_clause(clu)
 
