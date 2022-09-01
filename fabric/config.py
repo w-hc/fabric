@@ -31,8 +31,10 @@ def optional_load_config(fname="config.yml"):
 
 def write_full_config(cfg_obj, fname="full_config.yml"):
     cfg = cfg_obj.dict()
+    cfg = yaml.safe_dump(cfg, sort_keys=False)
+    print(f"\n--- full config ---\n\n{cfg}\n")
     with (Path.cwd() / fname).open("w") as f:
-        yaml.safe_dump(cfg, f, sort_keys=False)
+        f.write(cfg)
 
 
 def argparse_cfg_template(curr_cfgs):
