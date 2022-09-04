@@ -1,6 +1,7 @@
 from typing import List, Union
 from pathlib import Path
 import argparse
+from argparse import RawDescriptionHelpFormatter
 import yaml
 
 from pydantic import BaseModel as _Base
@@ -38,7 +39,11 @@ def write_full_config(cfg_obj, fname="full_config.yml"):
 
 
 def argparse_cfg_template(curr_cfgs):
-    parser = argparse.ArgumentParser(description='Manual spec of configs')
+    parser = argparse.ArgumentParser(
+        description='Manual spec of configs',
+        epilog=f'curr cfgs:\n\n{yaml.safe_dump(curr_cfgs)}',
+        formatter_class=RawDescriptionHelpFormatter
+    )
     _, args = parser.parse_known_args()
     clauses = []
     for i in range(0, len(args), 2):
@@ -51,5 +56,4 @@ def argparse_cfg_template(curr_cfgs):
         maker.execute_clause(clu)
 
     final = maker.state.copy()
-    # print(final)
     return final
