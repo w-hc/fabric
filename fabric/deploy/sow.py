@@ -351,61 +351,66 @@ class NodeTracer():
                     )
                 )
 
-    def add(self, objs, arg):
-        assert len(objs) <= 1, 'add deals with 1 obj everytime: {}'.format(objs)
-        if len(objs) == 1:
-            field = objs[0]
-            if isinstance(self.pointed, list):
-                assert str.isdigit(field)
-                field = int(field)
-                self.pointed.insert(field, arg)
-            elif isinstance(self.pointed, dict):
-                assert field not in self.pointed, 'field {} present in {}'\
-                    .format(field, self.pointed)
-                self.pointed[field] = arg
-            else:
-                raise ValueError("{} is not a container node".format(self.pointed))
-        else:
-            assert isinstance(self.pointed, dict),\
-                '{} is not a dict, cannot use bare add'.format(self.pointed)
-            assert isinstance(arg, dict), 'expect dict when adding into dict'
-            for k in arg.keys():
-                assert k not in self.pointed, \
-                    '{} already present in {}'.format(k, self.pointed)
-            self.pointed.update(arg)
+    # def add(self, objs, arg):
+    #     assert len(objs) <= 1, 'add deals with 1 obj everytime: {}'.format(objs)
+    #     if len(objs) == 1:
+    #         field = objs[0]
+    #         if isinstance(self.pointed, list):
+    #             assert str.isdigit(field)
+    #             field = int(field)
+    #             self.pointed.insert(field, arg)
+    #         elif isinstance(self.pointed, dict):
+    #             assert field not in self.pointed, 'field {} present in {}'\
+    #                 .format(field, self.pointed)
+    #             self.pointed[field] = arg
+    #         else:
+    #             raise ValueError("{} is not a container node".format(self.pointed))
+    #     else:
+    #         assert isinstance(self.pointed, dict),\
+    #             '{} is not a dict, cannot use bare add'.format(self.pointed)
+    #         assert isinstance(arg, dict), 'expect dict when adding into dict'
+    #         for k in arg.keys():
+    #             assert k not in self.pointed, \
+    #                 '{} already present in {}'.format(k, self.pointed)
+    #         self.pointed.update(arg)
 
     def replace(self, objs, arg):
-        assert len(objs) <= 1, 'replace deals with 1 obj everytime: {}'.format(objs)
-        if len(objs) == 1:
-            field = objs[0]
-            if isinstance(self.pointed, list):
-                assert str.isdigit(field)
-                field = int(field)
-                self.pointed[field] = arg
-            elif isinstance(self.pointed, dict):
-                assert field in self.pointed, 'field {} not present in {}'\
-                    .format(field, self.pointed)
-                self.pointed[field] = arg
-            else:
-                raise ValueError("{} is not a container node".format(self.pointed))
-        else:
-            val_type = type(self.parent[self.child_token])
-            # coerce type consistency
-            if val_type == list:
-                arg = eval(arg)  # ugly hack
-            else:
-                arg = val_type(arg)
-            self.parent[self.child_token] = arg
+        # assert len(objs) <= 1, 'replace deals with 1 obj everytime: {}'.format(objs)
+        # if len(objs) == 1:
+        #     # this is really obscure logic; this is for bulk replacement; no..
+        #     field = objs[0]
+        #     if isinstance(self.pointed, list):
+        #         assert str.isdigit(field)
+        #         field = int(field)
+        #         self.pointed[field] = arg
+        #     elif isinstance(self.pointed, dict):
+        #         assert field in self.pointed, 'field {} not present in {}'\
+        #             .format(field, self.pointed)
+        #         self.pointed[field] = arg
+        #     else:
+        #         raise ValueError("{} is not a container node".format(self.pointed))
 
-    def delete(self, objs):
-        if isinstance(self.pointed, list):
-            objs = map(lambda x: int(x), objs)
-        elif isinstance(self.pointed, dict):
+        assert len(objs) == 0
+        val_type = type(self.parent[self.child_token])
+
+        if val_type == str:
             pass
         else:
-            raise ValueError("{} is not a container node".format(self.pointed))
-        for field in objs:
-            del self.pointed[field]
+            arg = eval(arg)
+            assert type(arg) == val_type, \
+                f"require {val_type.__name__}, given {type(arg).__name__}"
+
+        self.parent[self.child_token] = arg
+
+    # def delete(self, objs):
+    #     if isinstance(self.pointed, list):
+    #         objs = map(lambda x: int(x), objs)
+    #     elif isinstance(self.pointed, dict):
+    #         pass
+    #     else:
+    #         raise ValueError("{} is not a container node".format(self.pointed))
+    #     for field in objs:
+    #         del self.pointed[field]
 
 
 def plant_files(launch_dir, exp_name, cfg_node, overwrite):
