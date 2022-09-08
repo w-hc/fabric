@@ -1,26 +1,9 @@
 from pathlib import Path
 import json
-from datetime import datetime, timedelta
 from inspect import stack
-
+from .ticker import IntervalTicker
 
 _CURRENT_BEAT_STACK = []
-
-
-class IntervalTicker():
-    def __init__(self, interval=60):
-        self.interval = timedelta(seconds=interval)
-        self.last_tick = datetime.now()
-        self.now = self.last_tick
-
-    def tick(self):
-        self.now = datetime.now()
-        if (self.now - self.last_tick) > self.interval:
-            self.last_tick = self.now
-            return True
-
-    def tick_str(self):
-        return self.now.isoformat(timespec='seconds')
 
 
 def get_heartbeat():

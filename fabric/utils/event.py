@@ -2,8 +2,7 @@ from pathlib import Path
 import json
 import os
 from contextlib import contextmanager
-
-from .heartbeat import IntervalTicker
+from .ticker import IntervalTicker
 
 
 _CURRENT_STORAGE_STACK = []
