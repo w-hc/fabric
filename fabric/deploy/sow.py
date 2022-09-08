@@ -392,7 +392,10 @@ class NodeTracer():
 
         assert len(objs) == 0
         val_type = type(self.parent[self.child_token])
-
+        # this is such an unfortunate hack
+        # turn everything to string, so that eval could work
+        # some of the clauses come from cmdline, some from yaml files for sow.
+        arg = str(arg)
         if val_type == str:
             pass
         else:
