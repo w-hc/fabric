@@ -32,7 +32,7 @@ def optional_load_config(fname="config.yml"):
 
 def write_full_config(cfg_obj, fname="full_config.yml"):
     cfg = cfg_obj.dict()
-    cfg = yaml.safe_dump(cfg, sort_keys=False)
+    cfg = _dict_to_yaml(cfg)
     print(f"\n--- full config ---\n\n{cfg}\n")
     with (Path.cwd() / fname).open("w") as f:
         f.write(cfg)
@@ -41,7 +41,7 @@ def write_full_config(cfg_obj, fname="full_config.yml"):
 def argparse_cfg_template(curr_cfgs):
     parser = argparse.ArgumentParser(
         description='Manual spec of configs',
-        epilog=f'curr cfgs:\n\n{yaml.safe_dump(curr_cfgs)}',
+        epilog=f'curr cfgs:\n\n{_dict_to_yaml(curr_cfgs)}',
         formatter_class=RawDescriptionHelpFormatter
     )
     _, args = parser.parse_known_args()
@@ -57,3 +57,7 @@ def argparse_cfg_template(curr_cfgs):
 
     final = maker.state.copy()
     return final
+
+
+def _dict_to_yaml(arg):
+    return yaml.safe_dump(arg, sort_keys=False)
