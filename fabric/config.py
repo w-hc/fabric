@@ -12,6 +12,7 @@ class BaseConf(_Base):
     class Config:
         validate_all = True
         allow_mutation = False
+        extra = "ignore"
 
 
 def SingleOrList(inner_type):
