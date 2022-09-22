@@ -3,4 +3,3 @@ from .tqdm import tqdm
 from .heartbeat import HeartBeat, get_heartbeat
 from .debug import EarlyLoopBreak
 from .git import tag_version
-from .chatbot import warn_bot
