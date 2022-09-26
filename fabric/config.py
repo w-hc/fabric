@@ -61,4 +61,4 @@ def argparse_cfg_template(curr_cfgs):
 
 
 def _dict_to_yaml(arg):
-    return yaml.safe_dump(arg, sort_keys=False)
+    return yaml.safe_dump(arg, sort_keys=False, allow_unicode=True)
