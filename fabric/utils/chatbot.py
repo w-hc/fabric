@@ -6,11 +6,11 @@ from contextlib import contextmanager
 import traceback
 import socket
 
-import telebot
-
 
 class ChatBot():
     def __init__(self):
+        import telebot
+
         with Path("~/telebot_secrets.json").expanduser().open("r") as f:
             secrets = json.load(f)
             token = secrets['bot_token']
