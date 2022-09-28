@@ -73,7 +73,7 @@ def main():
         for i, exp_name in enumerate(to_display):
             maker = cfg_name_2_maker[exp_name]
             cprint('{}: {}'.format(i, exp_name), color=_INFO_COLOR)
-            print(yaml.dump(maker.state, default_flow_style=False))
+            print(_yaml_dump(maker.state))
         return
 
     # sow the cfgs
@@ -104,7 +104,8 @@ def main():
 
     # 3. save a log file for other utils to use
     with open(SOW_LOG_FNAME, 'w') as f:
-        yaml.dump(sow_acc, f, default_flow_style=False)
+        pl = _yaml_dump(sow_acc)
+        f.write(pl)
 
 
 def parse_launch_config(launch_config):
@@ -441,8 +442,14 @@ def plant_files(launch_dir, exp_name, cfg_node, overwrite):
         os.mkdir(exp_name)
 
     with open(cfg_fname, 'w') as f:
-        yaml.dump(cfg_node, f, default_flow_style=False)
+        pl = _yaml_dump(cfg_node)
+        f.write(pl)
+
     return True
+
+
+def _yaml_dump(state):
+    return yaml.safe_dump(state, sort_keys=False, allow_unicode=True, default_flow_style=False)
 
 
 if __name__ == '__main__':
