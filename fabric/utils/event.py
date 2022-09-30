@@ -55,7 +55,7 @@ class EventStorage():
                 output_dir.mkdir(parents=True, exist_ok=True)
             json_fname = output_dir / 'history.json'
 
-            self._file_handle = json_fname.open('a')
+            self._file_handle = json_fname.open('a', encoding='utf8')
             self.output_dir = output_dir  # make sure it's a path object
 
     def _init_curr_buffer_(self):
@@ -74,7 +74,7 @@ class EventStorage():
     def flush_history(self):
         if self.writable:
             for item in self.history:
-                line = json.dumps(item, sort_keys=True) + "\n"
+                line = json.dumps(item, sort_keys=True, ensure_ascii=False) + "\n"
                 self._file_handle.write(line)
             self._file_handle.flush()
         self.history = []
