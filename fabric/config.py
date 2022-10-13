@@ -11,7 +11,7 @@ from .deploy.sow import ConfigMaker
 class BaseConf(_Base):
     class Config:
         validate_all = True
-        allow_mutation = False
+        allow_mutation = True
         extra = "ignore"
 
 
@@ -62,3 +62,15 @@ def argparse_cfg_template(curr_cfgs):
 
 def _dict_to_yaml(arg):
     return yaml.safe_dump(arg, sort_keys=False, allow_unicode=True)
+
+
+def dispatch(module):
+    cfg = optional_load_config()
+    cfg = module(**cfg).dict()
+
+    cfg = argparse_cfg_template(cfg)  # cmdline takes priority
+    mod = module(**cfg)
+
+    write_full_config(mod)
+
+    mod.run()
