@@ -1,6 +1,5 @@
 from pathlib import Path
 import json
-import psycopg
 
 from pydantic import BaseModel, validator
 
@@ -24,6 +23,7 @@ class Record(BaseModel):
 
 
 def open_db():
+    import psycopg  # not importing in global in case the user doesn't need db
     with Path("~/psql_cred").expanduser().open("r") as f:
         cred = f.read()
     conn = psycopg.connect(cred)
@@ -127,8 +127,8 @@ def survey(interval=5):
                     for k in info.keys():
                         conn.update(jname, k, info[k])
 
-                    if timedelta(seconds=info['elapsed']) > timedelta(hours=3, minutes=50):
-                        conn.update(jname, "todo", 1)
+                    # if timedelta(seconds=info['elapsed']) > timedelta(hours=3, minutes=50):
+                    #     conn.update(jname, "todo", 1)
 
             conn.commit()
             sleep(interval)
