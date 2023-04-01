@@ -1,0 +1,20 @@
+# group: some_trial
+
+# import_base: not used often
+
+base:
+  arch:
+    option1: net1
+    option2: 0.5
+  option3: 7
+
+base_modify:
+  - option3: 0
+
+particular:
+  - name: e
+    modify:
+      - arch.option2: 1.0
+    expand:
+      - alias: [a1, a2, a3]
+        arch.option1: [net1, net2, net3]
