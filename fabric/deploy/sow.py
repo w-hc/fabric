@@ -14,13 +14,13 @@ _WARN_COLOR = 'red'
 _META_FIELD_NAME = '__meta__'
 
 _LAUNCH_FIELDS_SPEC = {
-    'required': ['group', 'particular'],
-    'optional': ['base_modify', 'desc'],
+    'required': ['particular'],
+    'optional': ['base_modify', 'desc', 'group'],
     'either': ['import_base', 'base']  # one of the field must be present
 }
 
 _PARTICULAR_FIELDS_SPEC = {
-    'required': ['name'],
+    'required': ['name'],  # why is it required?
     'optional': ['modify', 'expand'],
     'either': []
 }
@@ -77,12 +77,6 @@ def main():
         return
 
     # sow the cfgs
-    # 1. check that group namd and launch dir name match
-    # dir_name = LAUNCH_DIR_ABSPATH.split('/')[-1]
-    # assert dir_name == group_name, \
-    #     "group name: {}, but launch dir name: {}. Match them"\
-    #     .format(group_name, dir_name)
-    # del dir_name
 
     # 2. create exp folder and plant configs
     if not osp.isdir(RUN_DIR_NAME):
