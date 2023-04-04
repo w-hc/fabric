@@ -1,6 +1,7 @@
 # group: some_trial
 
-# import_base: not used often
+# import_base: ../base_template1.yml
+# path can be relative to this template file itself
 
 base:
   arch:
@@ -15,6 +16,13 @@ particular:
   - name: e
     modify:
       - arch.option2: 1.0
+    expand:  # catesian expand
+      - alias: [a1, a2]
+        arch.option1: [net1, net2]
+      - alias: [b1, b2]
+        option3: [1, 6]  # type matching is checked
+
+  - name: prefix2
     expand:
-      - alias: [a1, a2, a3]
-        arch.option1: [net1, net2, net3]
+      - alias: [1.1, 2]  # alias can be more than just string
+        arch.option2: [0.1, 0.2]

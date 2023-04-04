@@ -11,7 +11,6 @@ from termcolor import cprint
 _INFO_COLOR = 'blue'
 _WARN_COLOR = 'red'
 
-_META_FIELD_NAME = '__meta__'
 
 _LAUNCH_FIELDS_SPEC = {
     'required': ['particular'],
@@ -55,17 +54,18 @@ def main():
     args = parser.parse_args()
 
     LAUNCH_FNAME = args.file
-    LAUNCH_DIR_ABSPATH = osp.dirname(osp.abspath(LAUNCH_FNAME))
+    LAUNCH_DIR_ABSPATH = os.getcwd()
     RUN_DIR_NAME = args.dir
     SOW_LOG_FNAME = osp.join(LAUNCH_DIR_ABSPATH, args.log)
     with open(LAUNCH_FNAME, 'r') as f:
         launch_config = yaml.safe_load(f)
 
     # parse the config
-    # chdir first. cfg import might assume relpath from launch dir
+    # chdir first. cfg import might assume relpath from template file
     # this statement must come after reading launch_cfg
-    os.chdir(LAUNCH_DIR_ABSPATH)
+    os.chdir(osp.dirname(osp.abspath(LAUNCH_FNAME)))
     cfg_name_2_maker = parse_launch_config(launch_config)
+    os.chdir(LAUNCH_DIR_ABSPATH)
 
     # if mocking, print requested configs and quit
     if args.mock is not None:
@@ -78,25 +78,20 @@ def main():
 
     # sow the cfgs
 
-    # 2. create exp folder and plant configs
+    # 1. create the runs folder, chdir, and plant configs inside
     if not osp.isdir(RUN_DIR_NAME):
         os.mkdir(RUN_DIR_NAME)
-        print("making {} inside launch".format(RUN_DIR_NAME))
+        print(f"making {RUN_DIR_NAME} inside launch")
     os.chdir(RUN_DIR_NAME)
 
     sow_acc = []
     for i, (exp_name, maker) in enumerate(cfg_name_2_maker.items()):
-        # maker.state[_META_FIELD_NAME] = {
-        #     'group': group_name,
-        #     'name': exp_name
-        # }  # HC: remove the meta field for now
         cprint("sowing {}: {}".format(i, exp_name), color=_INFO_COLOR)
-        success = plant_files(
-            LAUNCH_DIR_ABSPATH, exp_name, maker.state, overwrite=args.overwrite)
+        success = plant_files(exp_name, maker.state, overwrite=args.overwrite)
         if success:
             sow_acc.append(osp.abspath(exp_name))
 
-    # 3. save a log file for other utils to use
+    # 2. save a log file for other utils to use
     with open(SOW_LOG_FNAME, 'w') as f:
         pl = _yaml_dump(sow_acc)
         f.write(pl)
@@ -104,17 +99,13 @@ def main():
 
 def parse_launch_config(launch_config):
     validate_dict_fields(launch_config, _LAUNCH_FIELDS_SPEC)
+
     acc = {}
-    # group_name = launch_config['group']
-
-    # import pudb
-    # pudb.set_trace()
-
     # construct base config through import or from 'base'
-    if 'import_base' in launch_config and launch_config['import_base']:
+    if 'import_base' in launch_config:
+        assert 'base' not in launch_config, \
+            'using imported base config; do not supply base config'
         import_path = launch_config['import_base']
-        assert 'base' not in launch_config or not launch_config['base'],\
-            'importing from {}, don\'t supply base config'.format(import_path)
         with open(import_path, 'r') as f:
             base_maker = ConfigMaker(yaml.safe_load(f))
     else:
@@ -411,7 +402,7 @@ class NodeTracer():
     #         del self.pointed[field]
 
 
-def plant_files(launch_dir, exp_name, cfg_node, overwrite):
+def plant_files(exp_name, cfg_node, overwrite):
     '''plant the config
     Args:
         launch_dir: abspath! of launch directory from which run.py is copied
