@@ -134,11 +134,13 @@ class EventStorage():
     def __enter__(self):
         if len(_CURRENT_STORAGE_STACK) > 0:
             parent = _CURRENT_STORAGE_STACK[-1]
-            root, dirname = parent.output_dir, self.output_dir
-            if root is not None and dirname is not None:
-                child_dir = parent.output_dir / f"{self.output_dir}_{parent.iter}"
-                self.output_dir = child_dir
-                parent.put(str(dirname), str(child_dir))
+            dir_parent, dir_child = parent.output_dir, self.output_dir
+            if dir_parent is not None and dir_child is not None:
+                # child resides in parent at a particular iter
+                self.output_dir = dir_parent / f"{dir_child}_{parent.iter}"
+                parent.put(str(dir_child), str(self.output_dir))
+            else:
+                self.output_dir = None
 
         if self.output_dir is not None:
             self.writable = True
