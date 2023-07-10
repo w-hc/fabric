@@ -59,13 +59,15 @@ class EventStorage():
             self.output_dir = output_dir  # make sure it's a path object
 
     def _init_curr_buffer_(self):
-        self.curr_buffer = {'iter': self.iter}
+        self.curr_buffer = {'iter': self.iter, 'wrote_artifact': False}
 
     def step(self, flush=False):
+        wrote_artifact = self.curr_buffer.pop('wrote_artifact')
+
         self.history.append(self.curr_buffer)
 
         on_flush_period = self.ticker.tick()
-        if flush or on_flush_period:
+        if flush or on_flush_period or wrote_artifact:
             self.flush_history()
 
         self.iter += 1
@@ -107,6 +109,7 @@ class EventStorage():
         # 2. the key is only inserted if the func succeeds
         save_func(fname)
         self.put(key, fname)
+        self.curr_buffer['wrote_artifact'] = True
         return fname
 
     def close(self):
