@@ -42,7 +42,7 @@ class EventStorage():
         self.iter = start_iter
         self.ticker = IntervalTicker(flush_period)
         self.history = []
-        self._current_prefix = ""
+        self._prefix = ""
         self._init_curr_buffer_()
 
         self.output_dir = output_dir
@@ -59,12 +59,14 @@ class EventStorage():
             self.output_dir = output_dir  # make sure it's a path object
 
     def _init_curr_buffer_(self):
-        self.curr_buffer = {'iter': self.iter, 'wrote_artifact': False}
+        self.buffer = {'wrote_artifact': False}
 
     def step(self, flush=False):
-        wrote_artifact = self.curr_buffer.pop('wrote_artifact')
+        wrote_artifact = self.buffer.pop('wrote_artifact')
 
-        self.history.append(self.curr_buffer)
+        if len(self.buffer) > 0:
+            self.buffer['iter'] = self.iter
+            self.history.append(self.buffer)
 
         on_flush_period = self.ticker.tick()
         if flush or on_flush_period or wrote_artifact:
@@ -83,7 +85,7 @@ class EventStorage():
 
     def full_key(self, key):
         assert isinstance(key, str)
-        name = self._current_prefix + key
+        name = self._prefix + key
         return name
 
     def put(self, key, val):
@@ -91,7 +93,7 @@ class EventStorage():
         assert isinstance(val, (int, float, str))
         if isinstance(val, float):
             val = round(val, 3)
-        self.curr_buffer[key] = val
+        self.buffer[key] = val
 
     def put_scalars(self, **kwargs):
         for k, v in kwargs.items():
@@ -109,7 +111,7 @@ class EventStorage():
         # 2. the key is only inserted if the func succeeds
         save_func(fname)
         self.put(key, fname)
-        self.curr_buffer['wrote_artifact'] = True
+        self.buffer['wrote_artifact'] = True
         return fname
 
     def close(self):
@@ -129,10 +131,10 @@ class EventStorage():
             A context within which all the events added to this storage
             will be prefixed by the name scope.
         """
-        old_prefix = self._current_prefix
-        self._current_prefix = name.rstrip("/") + "/"
+        old_prefix = self._prefix
+        self._prefix = name.rstrip("/") + "/"
         yield
-        self._current_prefix = old_prefix
+        self._prefix = old_prefix
 
     def __enter__(self):
         if len(_CURRENT_STORAGE_STACK) > 0:
