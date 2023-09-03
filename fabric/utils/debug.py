@@ -13,3 +13,12 @@ class EarlyLoopBreak():
         self.iter += 1
         if self.break_at > 0 and self.iter >= self.break_at:
             return True
+
+
+def pudb_clear_linecache_and_set_trace():
+    # pudb does not reload the code in IPython shell
+    # https://github.com/inducer/pudb/issues/105
+    import pudb
+    import linecache
+    linecache.clearcache()
+    pudb.set_trace()
