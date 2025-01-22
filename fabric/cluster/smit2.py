@@ -107,7 +107,8 @@ def main():
 
         records.append(entry)
 
-    if not args.mock and not args.nodb:
+    # if not args.mock and not args.nodb:
+    if False:
         with open_db() as conn:
             conn = ConnWrapper(conn)
             if args.action == "run":

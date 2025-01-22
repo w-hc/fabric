@@ -13,6 +13,8 @@
 
 #SBATCH {extra}
 
+echo $SLURMD_NODENAME
+
 cd {task_dirname}
 
 {job_cmd}
