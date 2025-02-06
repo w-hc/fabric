@@ -4,6 +4,7 @@ import yaml
 import subprocess
 from tempfile import NamedTemporaryFile
 from .watch import Record, ConnWrapper, open_db
+from .. import dir_of_this_file
 
 
 VALID_ACTS = ('run', 'cancel')
@@ -11,7 +12,7 @@ DEFAULT_PARTITION = 'greg-gpu'
 
 
 def load_template():
-    template_fname = Path(__file__).resolve().parent / "sbatch_template.sh"
+    template_fname = dir_of_this_file(__file__) / "sbatch_template.sh"
     with template_fname.open("r") as f:
         template = f.read()
     return template
@@ -32,16 +33,16 @@ def sbatch_exec(script):
         subprocess.run(f"sbatch {sbatch_file_name}", shell=True, check=True)
 
 
-def make_record(task_dirname, partition, num_devices, job_cmd, extra=[]):
+def make_record(task_dirname, args, extra=[]):
     task_dirname = Path(task_dirname)
     job_name = task_dirname.name
     extra = ' '.join(extra)
 
     script = template.format(
-        jname=job_name, partition=partition,
-        num_devices=num_devices,
+        jname=job_name, partition=args.partition,
+        num_gpus=args.num_gpus, num_cpus=args.num_cpus,
         task_dirname=str(task_dirname), log_fname=str(task_dirname / "slurm.out"),
-        job_cmd=job_cmd, extra=extra
+        job_cmd=args.job, extra=extra
     )
 
     entry = Record(
@@ -62,8 +63,11 @@ def main():
         '-p', '--partition', default=DEFAULT_PARTITION, type=str,
         help='the job partition. default {}'.format(DEFAULT_PARTITION))
     parser.add_argument(
-        '-n', '--num-cores', type=int, default=1,
-        help='Number of cores to run the job.')
+        '-G', '--num-gpus', type=int, default=0,
+        help='Number of GPUs')
+    parser.add_argument(
+        '-c', '--num-cpus', type=int, default=0,
+        help='Number of CPUs')
     parser.add_argument(
         '-j', '--job', type=str, required=False, default="",
         help='the job command')
@@ -76,6 +80,9 @@ def main():
 
     args, unknown = parser.parse_known_args()  # pass unknown to runner script
     print(args)
+
+    if args.num_cpus == 0:
+        args.num_cpus = args.num_gpus * 2
 
     if args.mock:
         print("WARN: using mock mode")
@@ -93,7 +100,7 @@ def main():
         task_dir = Path(task_dir)
         assert task_dir.is_dir()
         entry = make_record(
-            task_dir, args.partition, args.num_cores, args.job, unknown
+            task_dir, args, unknown
         )
 
         if args.mock:

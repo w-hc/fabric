@@ -4,7 +4,8 @@
 #SBATCH -d singleton
 
 #SBATCH --partition={partition}
-#SBATCH -c {num_devices}
+#SBATCH -G {num_gpus}
+#SBATCH -c {num_cpus}
 
 #SBATCH --output={log_fname}
 #SBATCH --open-mode=append
@@ -13,7 +14,9 @@
 
 #SBATCH {extra}
 
-echo $SLURMD_NODENAME
+echo --------
+echo SLURM NODENAME: $SLURMD_NODENAME
+echo --------
 
 cd {task_dirname}
 
