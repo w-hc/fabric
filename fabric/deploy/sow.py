@@ -5,7 +5,7 @@ from copy import deepcopy
 from collections import namedtuple
 import yaml
 from termcolor import cprint
-
+from .. import yaml_read
 
 # '_' prefix so that it is sorted to the top when dumping yaml
 _INFO_COLOR = 'blue'
@@ -44,6 +44,10 @@ def main():
         help='a yml containing a list of abspaths to touched exps'
     )
     parser.add_argument(
+        '--repeat', type=int, default=0,
+        help='repeat each exp k times'
+    )
+    parser.add_argument(
         '--overwrite', action='store_true',
         help='in case of duplicate exp names, overwrite their options'
     )
@@ -57,8 +61,7 @@ def main():
     LAUNCH_DIR_ABSPATH = os.getcwd()
     RUN_DIR_NAME = args.dir
     SOW_LOG_FNAME = osp.join(LAUNCH_DIR_ABSPATH, args.log)
-    with open(LAUNCH_FNAME, 'r') as f:
-        launch_config = yaml.safe_load(f)
+    launch_config = yaml_read(LAUNCH_FNAME)
 
     # parse the config
     # chdir first. cfg import might assume relpath from template file
@@ -87,9 +90,8 @@ def main():
     sow_acc = []
     for i, (exp_name, maker) in enumerate(cfg_name_2_maker.items()):
         cprint("sowing {}: {}".format(i, exp_name), color=_INFO_COLOR)
-        success = plant_files(exp_name, maker.state, overwrite=args.overwrite)
-        if success:
-            sow_acc.append(osp.abspath(exp_name))
+        _paths = plant_cfg(exp_name, maker.state, overwrite=args.overwrite, repeat=args.repeat)
+        sow_acc.extend([osp.abspath(e) for e in _paths])
 
     # 2. save a log file for other utils to use
     with open(SOW_LOG_FNAME, 'w') as f:
@@ -106,8 +108,7 @@ def parse_launch_config(launch_config):
         assert 'base' not in launch_config, \
             'using imported base config; do not supply base config'
         import_path = launch_config['import_base']
-        with open(import_path, 'r') as f:
-            base_maker = ConfigMaker(yaml.safe_load(f))
+        base_maker = ConfigMaker(yaml_read(import_path))
     else:
         base_maker = ConfigMaker(launch_config['base'])
 
@@ -402,35 +403,55 @@ class NodeTracer():
     #         del self.pointed[field]
 
 
-def plant_files(exp_name, cfg_node, overwrite):
+def plant_cfg(expname, cfg_node, overwrite, repeat):
     '''plant the config
     Args:
         launch_dir: abspath! of launch directory from which run.py is copied
         exp_name: the bare name of experiment folder in which things are dumped
     '''
-    cfg_fname = osp.join(exp_name, 'config.yml')
-    if osp.isdir(exp_name):  # duplicate exists
-        # 1. compare whether the options are identical
-        with open(cfg_fname, 'r') as f:
-            old_cfg = yaml.safe_load(f)
-        if old_cfg == cfg_node:
-            print("dup identical", end='; ')
+
+    def _write_cfg(_path, payload):
+        assert str(_path)[-3:] == 'yml'
+        with open(_path, 'w') as f:
+            pl = _yaml_dump(payload)
+            f.write(pl)
+
+    def _do_plant(exp_name):
+        cfg_fname = osp.join(exp_name, 'config.yml')
+
+        if osp.isdir(exp_name):  # duplicate exists
+            # 1. compare whether the options are identical
+            old_cfg = yaml_read(cfg_fname)
+
+            if old_cfg == cfg_node:
+                print("dup identical", end='; ')
+            else:
+                cprint("dup differs: {}".format(exp_name), color=_WARN_COLOR, end='; ')
+
+            if overwrite:
+                print("overwriting")
+                _write_cfg(cfg_fname, cfg_node)
+                return [cfg_fname]
+            else:
+                print("skipping")
+                return []
+
         else:
-            cprint("dup differs: {}".format(exp_name), color=_WARN_COLOR, end='; ')
-        if overwrite:
-            print("overwriting")
-            pass
-        else:
-            print("skipping")
-            return False
+            os.mkdir(exp_name)
+            _write_cfg(cfg_fname, cfg_node)
+            return [cfg_fname]
+
+    if repeat == 0:
+        return _do_plant(expname)
     else:
-        os.mkdir(exp_name)
-
-    with open(cfg_fname, 'w') as f:
-        pl = _yaml_dump(cfg_node)
-        f.write(pl)
-
-    return True
+        assert repeat > 0
+        os.makedirs(expname, exist_ok=True)
+        _planted_paths = []
+        for i in range(repeat):
+            _planted_paths.extend(_do_plant(
+                osp.join(expname, f"{i:0>2}")
+            ))
+        return _planted_paths
 
 
 def _yaml_dump(state):
