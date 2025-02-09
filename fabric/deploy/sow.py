@@ -35,14 +35,22 @@ def main():
         '-f', '--file', type=str, required=True,
         help='a yaml based on our convention describing the experiments to run'
     )
+
+    # parser.add_argument(
+    #     '-d', '--dir', type=str, default='runs',
+    #     help='the directory in which to plant configs'
+    # )
+    # parser.add_argument(
+    #     '-l', '--log', type=str, default='touched_exps.yml',
+    #     help='a yml containing a list of abspaths to touched exps'
+    # )
+    # HC: a strong, opinionated default to use runs_{k}/ and exps_{k}.yml
+    # directory listing groups things together for easy visual tracking
     parser.add_argument(
-        '-d', '--dir', type=str, default='runs',
-        help='the directory in which to plant configs'
+        '-k', '--key', type=str, required=True,
+        help='key used to name the runs directory and log file'
     )
-    parser.add_argument(
-        '-l', '--log', type=str, default='touched_exps.yml',
-        help='a yml containing a list of abspaths to touched exps'
-    )
+
     parser.add_argument(
         '--repeat', type=int, default=0,
         help='repeat each exp k times'
@@ -59,8 +67,8 @@ def main():
 
     LAUNCH_FNAME = args.file
     LAUNCH_DIR_ABSPATH = os.getcwd()
-    RUN_DIR_NAME = args.dir
-    SOW_LOG_FNAME = osp.join(LAUNCH_DIR_ABSPATH, args.log)
+    RUN_DIR_NAME = f"runs_{args.key}"
+    SOW_LOG_FNAME = osp.join(LAUNCH_DIR_ABSPATH, f"exps_{args.key}.yml")
     launch_config = yaml_read(LAUNCH_FNAME)
 
     # parse the config
