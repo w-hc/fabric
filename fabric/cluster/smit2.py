@@ -1,10 +1,9 @@
 from pathlib import Path
 import argparse
-import yaml
 import subprocess
 from tempfile import NamedTemporaryFile
 from .watch import Record, ConnWrapper, open_db
-from .. import dir_of_this_file
+from .. import dir_of_this_file, yaml_read
 
 
 VALID_ACTS = ('run', 'cancel')
@@ -54,8 +53,11 @@ def make_record(task_dirname, args, extra=[]):
 def main():
     parser = argparse.ArgumentParser(description='slurm sbatch submit')
     parser.add_argument(
-        '-f', '--file', type=str, required=True,
+        '-f', '--file', type=str, required=False, default=None,
         help='a yaml containing a list of absolute paths to the job folders')
+    parser.add_argument(
+        '--dir', type=str, required=False, default=None,
+        help='simply exec the j_cmd in this directory.')
     parser.add_argument(
         '-a', '--action', default='run',
         help='one of {}, default {}'.format(VALID_ACTS, VALID_ACTS[0]))
@@ -81,8 +83,14 @@ def main():
     args, unknown = parser.parse_known_args()  # pass unknown to runner script
     print(args)
 
+    # slurm is smart enough to handle the error case of both being 0
     if args.num_cpus == 0:
         args.num_cpus = args.num_gpus * 2
+
+    xor = (args.file is not None) ^ (args.dir is not None)
+    if not xor:
+        raise ValueError("exactly one of [--file] or [--dir] is required for smit")
+    task_dir_list = yaml_read(args.file) if args.file else [args.dir]
 
     if args.mock:
         print("WARN: using mock mode")
@@ -92,13 +100,14 @@ def main():
             f"action must be one of {VALID_ACTS}, but given: {args.action}"
         )
 
-    with open(args.file) as f:
-        task_dir_list = yaml.safe_load(f)
-
     records = []
     for task_dir in task_dir_list:
         task_dir = Path(task_dir)
+
         assert task_dir.is_dir()
+        # TODO: load the config.yml and read submit specific options
+        # override what is in the args
+
         entry = make_record(
             task_dir, args, unknown
         )
