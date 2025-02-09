@@ -439,7 +439,7 @@ def plant_cfg(expname, cfg_node, overwrite, repeat):
             if overwrite:
                 print("overwriting")
                 _write_cfg(cfg_fname, cfg_node)
-                return [cfg_fname]
+                return [exp_name]
             else:
                 print("skipping")
                 return []
@@ -447,7 +447,7 @@ def plant_cfg(expname, cfg_node, overwrite, repeat):
         else:
             os.mkdir(exp_name)
             _write_cfg(cfg_fname, cfg_node)
-            return [cfg_fname]
+            return [exp_name]
 
     if repeat == 0:
         return _do_plant(expname)
