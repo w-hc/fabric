@@ -32,9 +32,8 @@ def sbatch_exec(script):
         subprocess.run(f"sbatch {sbatch_file_name}", shell=True, check=True)
 
 
-def make_record(task_dirname, args, extra=[]):
+def make_record(job_name, task_dirname, args, extra=[]):
     task_dirname = Path(task_dirname)
-    job_name = task_dirname.name
     extra = ' '.join(extra)
 
     script = template.format(
@@ -48,6 +47,27 @@ def make_record(task_dirname, args, extra=[]):
         name=job_name, todo=0, path=str(task_dirname), sbatch=script
     )
     return entry
+
+
+def infer_job_names(task_dirs):
+    assert len(task_dirs) > 0
+
+    if len(task_dirs) == 1:
+        return [Path(task_dirs[0]).name]
+    else:
+        # split an abspath by / e.g. aa/bb/c_dd/01 -> [aa, b, c_dd, 01]
+        # compare each segment, and find the common prefix.
+        # job name starts where the common prefix segments end.
+        # this is NOT string common prefix; if a segment is different e.g. c_dd vs c_ee,
+        # I want the whole segment in the job name
+        task_dirs = [p.split('/') for p in task_dirs]
+        inx = 0
+        while True:
+            if len(set([segs[inx] for segs in task_dirs])) > 1:
+                break
+            inx += 1
+        job_names = ['_'.join(segs[inx:]) for segs in task_dirs]
+        return job_names
 
 
 def main():
@@ -91,6 +111,7 @@ def main():
     if not xor:
         raise ValueError("exactly one of [--file] or [--dir] is required for smit")
     task_dir_list = yaml_read(args.file) if args.file else [args.dir]
+    job_names = infer_job_names(task_dir_list)
 
     if args.mock:
         print("WARN: using mock mode")
@@ -101,15 +122,14 @@ def main():
         )
 
     records = []
-    for task_dir in task_dir_list:
-        task_dir = Path(task_dir)
-
+    for i in range(len(task_dir_list)):
+        task_dir = Path(task_dir_list[i])
         assert task_dir.is_dir()
         # TODO: load the config.yml and read submit specific options
         # override what is in the args
 
         entry = make_record(
-            task_dir, args, unknown
+            job_names[i], task_dir, args, unknown
         )
 
         if args.mock:
