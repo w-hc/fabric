@@ -1,6 +1,7 @@
 from pathlib import Path
 import argparse
 import subprocess
+from pprint import pprint
 from tempfile import NamedTemporaryFile
 from .watch import Record, ConnWrapper, open_db
 from .. import dir_of_this_file, yaml_read
@@ -49,35 +50,47 @@ def make_record(job_name, task_dirname, args, extra=[]):
     return entry
 
 
-def infer_job_names(task_dirs):
+def infer_job_names(task_dirs, nj: int):
     assert len(task_dirs) > 0
 
-    if len(task_dirs) == 1:
-        return [Path(task_dirs[0]).name]
+    # split an abspath by / e.g. aa/bb/c_dd/01 -> [aa, b, c_dd, 01]
+    task_dirs = [Path(p).resolve().parts for p in task_dirs]
+
+    if nj is not None:
+        task_dirs = [segs[-nj:] for segs in task_dirs]
     else:
-        # split an abspath by / e.g. aa/bb/c_dd/01 -> [aa, b, c_dd, 01]
-        # compare each segment, and find the common prefix.
-        # job name starts where the common prefix segments end.
-        # this is NOT string common prefix; if a segment is different e.g. c_dd vs c_ee,
-        # I want the whole segment in the job name
-        task_dirs = [p.split('/') for p in task_dirs]
-        inx = 0
-        while True:
-            if len(set([segs[inx] for segs in task_dirs])) > 1:
-                break
-            inx += 1
-        job_names = ['_'.join(segs[inx:]) for segs in task_dirs]
-        return job_names
+        if len(task_dirs) == 1:
+            # pick the last seg of the path
+            task_dirs = [segs[-1:] for segs in task_dirs]
+        else:
+            # compare each segment, and find the common prefix.
+            # job name starts where the common prefix segments end.
+            # this is NOT string common prefix; if a segment is different e.g. c_dd vs c_ee,
+            # I want the whole segment in the job name
+            inx = 0
+            while True:
+                if len(set([segs[inx] for segs in task_dirs])) > 1:
+                    break
+                inx += 1
+            task_dirs = [segs[inx:] for segs in task_dirs]
+
+    job_names = ['/'.join(segs) for segs in task_dirs]
+    return job_names
 
 
 def main():
     parser = argparse.ArgumentParser(description='slurm sbatch submit')
     parser.add_argument(
         '-f', '--file', type=str, required=False, default=None,
-        help='a yaml containing a list of absolute paths to the job folders')
+        help='yaml of a list of abspaths to the job directories, where j_cmd is run.')
     parser.add_argument(
         '--dir', type=str, required=False, default=None,
-        help='simply exec the j_cmd in this directory.')
+        help='simply exec the j_cmd in the specified directory.')
+    parser.add_argument(
+        '--nj', type=int, required=False, default=None,
+        help='use the last n segments of each path as job name'
+    )
+
     parser.add_argument(
         '-a', '--action', default='run',
         help='one of {}, default {}'.format(VALID_ACTS, VALID_ACTS[0]))
@@ -101,7 +114,8 @@ def main():
         help='do not register jobs to database')
 
     args, unknown = parser.parse_known_args()  # pass unknown to runner script
-    print(args)
+    pprint(vars(args))
+    print("")
 
     # slurm is smart enough to handle the error case of both being 0
     if args.num_cpus == 0:
@@ -111,7 +125,8 @@ def main():
     if not xor:
         raise ValueError("exactly one of [--file] or [--dir] is required for smit")
     task_dir_list = yaml_read(args.file) if args.file else [args.dir]
-    job_names = infer_job_names(task_dir_list)
+
+    job_names = infer_job_names(task_dir_list, args.nj)
 
     if args.mock:
         print("WARN: using mock mode")
