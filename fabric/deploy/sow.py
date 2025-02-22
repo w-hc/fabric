@@ -29,6 +29,22 @@ for _field_spec in (_LAUNCH_FIELDS_SPEC, _PARTICULAR_FIELDS_SPEC):
         + _field_spec['either']
 
 
+def join_parts_into_path(parts, nest_at):
+    if nest_at is None:
+        return '_'.join(parts)
+    else:
+        assert isinstance(nest_at, int) and nest_at >= 0
+        nest_at += 1  # skip the initial lead name
+        path = ""
+        for i, e in enumerate(parts):
+            if i == nest_at:
+                path += f"{e}/"
+            else:
+                path += f"{e}_"
+        path = path[:-1]  # remove the tail _ or /
+        return path
+
+
 def main():
     parser = argparse.ArgumentParser(description='deploy the experiments')
     parser.add_argument(
@@ -49,6 +65,11 @@ def main():
     parser.add_argument(
         '-k', '--key', type=str, required=True,
         help='key used to name the runs directory and log file'
+    )
+
+    parser.add_argument(
+        '--nest_at', type=int, required=False, default=None,
+        help='the default dirname a_b_c can result in lots of subdirs. If nest_at 0, then a/b_c. If nest_at 1, then a_b/c'
     )
 
     parser.add_argument(
@@ -76,6 +97,11 @@ def main():
     # this statement must come after reading launch_cfg
     os.chdir(osp.dirname(osp.abspath(LAUNCH_FNAME)))
     cfg_name_2_maker = parse_launch_config(launch_config)
+    cfg_name_2_maker = {
+        join_parts_into_path(k, args.nest_at): v
+        for k, v in cfg_name_2_maker.items()
+    }
+
     os.chdir(LAUNCH_DIR_ABSPATH)
 
     # if mocking, print requested configs and quit
@@ -141,7 +167,7 @@ def parse_launch_config(launch_config):
         if 'expand' in part:
             assert isinstance(part['expand'], list)
             dfs_expand(
-                level=0, name='{}_'.format(part_name),
+                level=0, namelist=[part_name],
                 maker=curr_maker.clone(), deposit=acc, grids=part['expand']
             )
         else:
@@ -177,10 +203,10 @@ def validate_dict_fields(src_dict, field_spec):
             ))
 
 
-def dfs_expand(level, name, maker, deposit, grids):
+def dfs_expand(level, namelist, maker, deposit, grids):
     if level == len(grids):
-        name = name[:-1]  # throw away the '_' at the end of say 'lr_lo_'
-        deposit[name] = maker.clone()
+        k = tuple(namelist)
+        deposit[k] = maker.clone()
         return
 
     tier = grids[level]
@@ -199,13 +225,13 @@ def dfs_expand(level, name, maker, deposit, grids):
         alias = range(size)
 
     for nick_name, inx in zip(alias, range(size)):
-        nick_name = '{}{}_'.format(name, nick_name)
+        new_namelist = [*namelist, nick_name]
         curr_maker = maker.clone()
         for clause in iter_clauses:
             arg = tier[clause][inx]
             clause = {clause: arg}
             curr_maker.execute_clause(clause)
-        dfs_expand(level + 1, nick_name, curr_maker, deposit, grids)
+        dfs_expand(level + 1, new_namelist, curr_maker, deposit, grids)
 
 
 class ConfigMaker():
@@ -445,7 +471,7 @@ def plant_cfg(expname, cfg_node, overwrite, repeat):
                 return []
 
         else:
-            os.mkdir(exp_name)
+            os.makedirs(exp_name, exist_ok=False)
             _write_cfg(cfg_fname, cfg_node)
             return [exp_name]
 
