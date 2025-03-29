@@ -4,19 +4,8 @@ import argparse
 from argparse import RawDescriptionHelpFormatter
 import yaml
 
-from pydantic import BaseModel as _Base
+from .thimble import BaseConfig, mkcfg, oneof
 from .deploy.sow import ConfigMaker
-
-
-class BaseConf(_Base):
-    class Config:
-        validate_all = True
-        allow_mutation = True
-        extra = "ignore"
-
-
-def SingleOrList(inner_type):
-    return Union[inner_type, List[inner_type]]
 
 
 def optional_load_config(fname="config.yml"):
@@ -64,13 +53,13 @@ def _dict_to_yaml(arg):
     return yaml.safe_dump(arg, sort_keys=False, allow_unicode=True)
 
 
-def dispatch(module):
+def instantiate(module):
     cfg = optional_load_config()
-    cfg = module(**cfg).dict()
+    cfg = module(cfg).as_dict()
 
     cfg = argparse_cfg_template(cfg)  # cmdline takes priority
-    mod = module(**cfg)
+    mod = module(cfg)
 
     write_full_config(mod)
 
-    mod.run()
+    return mod
