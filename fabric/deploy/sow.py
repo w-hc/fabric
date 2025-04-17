@@ -210,27 +210,58 @@ def dfs_expand(level, namelist, maker, deposit, grids):
         return
 
     tier = grids[level]
-    iter_clauses = list(tier.keys())
-    size = len(tier[iter_clauses[0]])
-    for clause in iter_clauses:
-        # broadcast config if of length 1
-        if len(tier[clause]) == 1 and clause != 'alias':
-            tier[clause] = tier[clause] * size
-        assert len(tier[clause]) == size
 
-    if 'alias' in tier:
-        alias = tier['alias']
-        iter_clauses.remove('alias')
-    else:
-        alias = range(size)
+    # tier can be either dict[list], or list[dict]!
 
-    for nick_name, inx in zip(alias, range(size)):
-        new_namelist = [*namelist, nick_name]
+    # tier: dict[list]
+    if isinstance(tier, dict):
+        _keys = list(tier.keys())
+        size = len(tier[_keys[0]])
+
+        for k in _keys:
+            # broadcast config if of length 1; alias is not broadcastable; must be full-size.
+            if len(tier[k]) == 1 and k != 'alias':
+                tier[k] = tier[k] * size
+            assert len(tier[k]) == size
+
+        if 'alias' in tier:
+            alias = tier['alias']
+            _keys.remove('alias')
+        else:
+            alias = range(size)
+
+        accu = []
+        for nickname, inx in zip(alias, range(size)):
+            _payload = {
+                k: tier[k][inx]
+                for k in _keys
+            }
+            _payload['alias'] = nickname
+            accu.append(_payload)
+
+        tier = accu
+
+    tier: list[dict]
+    keys = None
+    for factor in tier:
+        factor: dict
+        if keys is None:
+            keys = factor.keys()
+        else:
+            assert factor.keys() == keys
+
+        nickname = factor['alias']
+        new_namelist = [*namelist, nickname]
         curr_maker = maker.clone()
-        for clause in iter_clauses:
-            arg = tier[clause][inx]
-            clause = {clause: arg}
-            curr_maker.execute_clause(clause)
+        for k, v in factor.items():
+            if k == 'alias':
+                # don't try to pop alias before here.
+                # all kinds of subtle mem-ref issues.
+                # 1) keys are modifed after pop().
+                # 2) yaml parser makes ref-linked subtree share a dict storage. multiple subtrees affected after pop().
+                #    yaml ref is hard to disable for auto-generated configs.
+                continue
+            curr_maker.execute_clause({k: v})
         dfs_expand(level + 1, new_namelist, curr_maker, deposit, grids)
 
 
