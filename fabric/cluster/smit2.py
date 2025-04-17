@@ -1,10 +1,27 @@
 from pathlib import Path
 import argparse
+import shlex
+from copy import deepcopy
 import subprocess
 from pprint import pprint
 from tempfile import NamedTemporaryFile
-from .watch import Record, ConnWrapper, open_db
+from dataclasses import dataclass
+# from .watch import Record, ConnWrapper, open_db
 from .. import dir_of_this_file, yaml_read
+
+
+@dataclass
+class Record():
+    # this is a dup of watch.py; I am no longer using pydantic
+    name: str
+    todo: int
+    meter: str = ""
+    beat: str = ""
+    caller: str = ""
+    done: bool = False
+    elapsed: int = 0
+    path: str = ""
+    sbatch: str = ""
 
 
 VALID_ACTS = ('run', 'cancel')
@@ -78,7 +95,7 @@ def infer_job_names(task_dirs, nj: int):
     return job_names
 
 
-def main():
+def make_parser():
     parser = argparse.ArgumentParser(description='slurm sbatch submit')
     parser.add_argument(
         '-f', '--file', type=str, required=False, default=None,
@@ -109,9 +126,21 @@ def main():
     parser.add_argument(
         '-m', '--mock', default=False, action='store_true',
         help='in mock mode the slurm command is printed but not executed')
-    parser.add_argument(
-        '--nodb', default=False, action='store_true',
-        help='do not register jobs to database')
+    # parser.add_argument(
+    #     '--nodb', default=False, action='store_true',
+    #     help='do not register jobs to database')
+
+    # a duplicate that has all defaults set to None
+    parser_no_default = deepcopy(parser)
+    for a in parser_no_default._actions:
+        if a.dest != 'help':
+            a.default = None
+
+    return parser, parser_no_default
+
+
+def main():
+    parser, parser_no_default = make_parser()
 
     args, unknown = parser.parse_known_args()  # pass unknown to runner script
     pprint(vars(args))
@@ -129,7 +158,7 @@ def main():
     job_names = infer_job_names(task_dir_list, args.nj)
 
     if args.mock:
-        print("WARN: using mock mode")
+        print("WARN: using mock mode\n")
 
     if args.action not in VALID_ACTS:
         raise ValueError(
@@ -140,16 +169,34 @@ def main():
     for i in range(len(task_dir_list)):
         task_dir = Path(task_dir_list[i])
         assert task_dir.is_dir()
-        # TODO: load the config.yml and read submit specific options
+
+        curr_args, curr_unknown = args, unknown
+
+        # load the config.yml and read smit specific cmd
         # override what is in the args
+        cfg_fname = task_dir / "config.yml"
+        if cfg_fname.is_file():
+            job_specific_args_str = yaml_read(cfg_fname).get("smit", None)
+            curr_args, curr_unknown = merge_job_specific_args(
+                parser_no_default,  # CANNOT use the vanilla parser. Defaults will erroneously override the global args.
+                curr_args, curr_unknown,
+                job_specific_args_str
+            )
 
         entry = make_record(
-            job_names[i], task_dir, args, unknown
+            job_names[i], task_dir, curr_args, curr_unknown
         )
 
         if args.mock:
-            print(entry.sbatch)
-            break
+            if (i == 0):
+                print(entry.sbatch)
+            print(f"------ {entry.name}")
+            _info = vars(curr_args)  # remove items that individual job cannot override
+            _info.pop('mock'), _info.pop('file'), _info.pop('dir'), _info.pop('action')
+            print(_info)
+            print(curr_unknown)
+            print("------\n")
+            continue
 
         if args.action == "run":
             sbatch_exec(entry.sbatch)
@@ -159,40 +206,70 @@ def main():
         records.append(entry)
 
     # if not args.mock and not args.nodb:
-    if False:
-        with open_db() as conn:
-            conn = ConnWrapper(conn)
-            if args.action == "run":
-                conn.insert(records)
-            elif args.action == "cancel":
-                for row in records:
-                    conn.drop_row(row.name)
-            conn.commit()
+    # if False:
+    #     with open_db() as conn:
+    #         conn = ConnWrapper(conn)
+    #         if args.action == "run":
+    #             conn.insert(records)
+    #         elif args.action == "cancel":
+    #             for row in records:
+    #                 conn.drop_row(row.name)
+    #         conn.commit()
+
+
+def merge_job_specific_args(
+    parser_no_default, curr_args, curr_unknown,
+    job_specific_args_str
+):
+    if job_specific_args_str is None:
+        return curr_args, curr_unknown
+
+    extra_args, extra_unknown = parser_no_default.parse_known_args(
+        shlex.split(job_specific_args_str)
+    )
+
+    del curr_unknown
+
+    curr_args = deepcopy(curr_args)
+    for k, v in vars(extra_args).items():
+        if v is not None:  # all defaults are overriden to None. val=None means it's not user-supplied.
+            setattr(curr_args, k, v)
+
+    # # debug prints
+    # print('------')
+    # print(extra_args)
+    # print(extra_unknown)
+    # print(curr_args)
+    # print('------')
+
+    # just pass the updated unknown
+    return curr_args, extra_unknown
 
 
 def sbatch_cancel(jname):
     subprocess.run(f"scancel -n {jname}", shell=True, check=True)
 
 
-def period_watch(interval):
-    from time import sleep
-    from tqdm import tqdm
+# # deprecated
+# def period_watch(interval):
+#     from time import sleep
+#     from tqdm import tqdm
 
-    with open_db() as conn:
-        conn = ConnWrapper(conn)
-        pbar = tqdm()
+#     with open_db() as conn:
+#         conn = ConnWrapper(conn)
+#         pbar = tqdm()
 
-        while True:
-            pbar.update()
-            jobs = conn.get_all_jobs()
-            for j in jobs:
-                jname, todo = j.name, j.todo
-                if todo != 0:
-                    if todo == 1:
-                        sbatch_exec(j.sbatch)
-                    elif todo == 2:
-                        sbatch_cancel(jname)
-                        conn.drop_row(jname)
-                    conn.update(jname, "todo", 0)
-            conn.commit()
-            sleep(interval)
+#         while True:
+#             pbar.update()
+#             jobs = conn.get_all_jobs()
+#             for j in jobs:
+#                 jname, todo = j.name, j.todo
+#                 if todo != 0:
+#                     if todo == 1:
+#                         sbatch_exec(j.sbatch)
+#                     elif todo == 2:
+#                         sbatch_cancel(jname)
+#                         conn.drop_row(jname)
+#                     conn.update(jname, "todo", 0)
+#             conn.commit()
+#             sleep(interval)
