@@ -216,7 +216,7 @@ def dfs_expand(level, namelist, maker, deposit, grids):
     # tier: dict[list]
     if isinstance(tier, dict):
         _keys = list(tier.keys())
-        size = len(tier[_keys[0]])
+        size = max(len(tier[k]) for k in _keys)
 
         for k in _keys:
             # broadcast config if of length 1; alias is not broadcastable; must be full-size.
@@ -231,10 +231,9 @@ def dfs_expand(level, namelist, maker, deposit, grids):
             alias = range(size)
 
         accu = []
-        for nickname, inx in zip(alias, range(size)):
+        for inx, nickname in enumerate(alias):
             _payload = {
-                k: tier[k][inx]
-                for k in _keys
+                k: tier[k][inx] for k in _keys
             }
             _payload['alias'] = nickname
             accu.append(_payload)
@@ -257,7 +256,7 @@ def dfs_expand(level, namelist, maker, deposit, grids):
             if k == 'alias':
                 # don't try to pop alias before here.
                 # all kinds of subtle mem-ref issues.
-                # 1) keys are modifed after pop().
+                # 1) keys are modified in-place after pop().
                 # 2) yaml parser makes ref-linked subtree share a dict storage. multiple subtrees affected after pop().
                 #    yaml ref is hard to disable for auto-generated configs.
                 continue
