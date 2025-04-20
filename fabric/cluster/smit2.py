@@ -176,12 +176,15 @@ def main():
         # override what is in the args
         cfg_fname = task_dir / "config.yml"
         if cfg_fname.is_file():
-            job_specific_args_str = yaml_read(cfg_fname).get("smit", None)
-            curr_args, curr_unknown = merge_job_specific_args(
-                parser_no_default,  # CANNOT use the vanilla parser. Defaults will erroneously override the global args.
-                curr_args, curr_unknown,
-                job_specific_args_str
+            # jargs: job_specific_args
+            jargs = shlex.split(
+                yaml_read(cfg_fname).get("smit", "")
             )
+            if len(jargs) > 0:
+                # CANNOT use the vanilla parser. Defaults will erroneously override the global args.
+                curr_args, curr_unknown = merge_job_specific_args(
+                    parser_no_default, curr_args, curr_unknown, jargs
+                )
 
         entry = make_record(
             job_names[i], task_dir, curr_args, curr_unknown
@@ -190,7 +193,7 @@ def main():
         if args.mock:
             if (i == 0):
                 print(entry.sbatch)
-            print(f"------ {entry.name}")
+            print(f"------ {i}, {entry.name}")
             _info = vars(curr_args)  # remove items that individual job cannot override
             _info.pop('mock'), _info.pop('file'), _info.pop('dir'), _info.pop('action')
             print(_info)
@@ -219,13 +222,10 @@ def main():
 
 def merge_job_specific_args(
     parser_no_default, curr_args, curr_unknown,
-    job_specific_args_str
+    job_specific_args: list
 ):
-    if job_specific_args_str is None:
-        return curr_args, curr_unknown
-
     extra_args, extra_unknown = parser_no_default.parse_known_args(
-        shlex.split(job_specific_args_str)
+        job_specific_args
     )
 
     del curr_unknown
