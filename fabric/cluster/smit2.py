@@ -192,9 +192,12 @@ def main():
 
         if args.mock:
             if (i == 0):
+                print(r"======")
                 print(entry.sbatch)
+                print(r"======")
             print(f"------ {i}, {entry.name}")
-            _info = vars(curr_args)  # remove items that individual job cannot override
+            # don't show items that individual job cannot override.
+            _info = vars(curr_args).copy()  # copy() to avoid unwanted mutation due to mem-sharing.
             _info.pop('mock'), _info.pop('file'), _info.pop('dir'), _info.pop('action')
             print(_info)
             print(curr_unknown)
