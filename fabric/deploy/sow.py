@@ -3,6 +3,7 @@ import os.path as osp
 import argparse
 from copy import deepcopy
 from collections import namedtuple
+from typing import Any
 import yaml
 from termcolor import cprint
 from .. import yaml_read
@@ -14,12 +15,14 @@ _WARN_COLOR = 'red'
 
 _LAUNCH_FIELDS_SPEC = {
     'required': ['particular'],
-    'optional': ['base_modify', 'desc', 'group'],
+    'optional': ['base_modify', 'desc',],
     'either': ['import_base', 'base']  # one of the field must be present
 }
 
 _PARTICULAR_FIELDS_SPEC = {
-    'required': ['name'],  # why is it required?
+    # "name" is required cuz the final exp name consists of (name + ...expand_aliases).
+    # if a part has no expand, only modify, then the exp name becomes (name,)
+    'required': ['name'],
     'optional': ['modify', 'expand'],
     'either': []
 }
@@ -29,12 +32,13 @@ for _field_spec in (_LAUNCH_FIELDS_SPEC, _PARTICULAR_FIELDS_SPEC):
         + _field_spec['either']
 
 
-def join_parts_into_path(parts, nest_at):
+def join_parts_into_path(parts: tuple, nest_at: int):
+    assert isinstance(parts, tuple)
     if nest_at is None:
         return '_'.join(parts)
     else:
         assert isinstance(nest_at, int) and nest_at >= 0
-        nest_at += 1  # skip the initial lead name
+        nest_at += 1  # skip the initial lead name e.g. e_opt1_opt2_opt3 ignore the d_
         path = ""
         for i, e in enumerate(parts):
             if i == nest_at:
@@ -60,17 +64,17 @@ def main():
     #     '-l', '--log', type=str, default='touched_exps.yml',
     #     help='a yml containing a list of abspaths to touched exps'
     # )
-    # HC: a strong, opinionated default to use runs_{k}/ and exps_{k}.yml
-    # directory listing groups things together for easy visual tracking
+    # HC: a strong, opinionated default to use 1) runs_{k}/ and 2) exps_{k}.yml
+    # This way, [ls] would groups things together for easy visual tracking
+
     parser.add_argument(
         '-k', '--key', type=str, required=True,
         help='key used to name the runs directory and log file'
     )
-
     parser.add_argument(
         '--nest_at', type=int, required=False, default=None,
         help='the default dirname a_b_c can result in lots of subdirs. If nest_at 0, then a/b_c. If nest_at 1, then a_b/c'
-    )
+    )  # HC: a limitation is that only 1 nesting level allowed.
 
     parser.add_argument(
         '--repeat', type=int, default=0,
@@ -86,29 +90,28 @@ def main():
     )
     args = parser.parse_args()
 
-    LAUNCH_FNAME = args.file
     LAUNCH_DIR_ABSPATH = os.getcwd()
     RUN_DIR_NAME = f"runs_{args.key}"
     SOW_LOG_FNAME = osp.join(LAUNCH_DIR_ABSPATH, f"exps_{args.key}.yml")
-    launch_config = yaml_read(LAUNCH_FNAME)
 
     # parse the config
-    # chdir first. cfg import might assume relpath from template file
-    # this statement must come after reading launch_cfg
-    os.chdir(osp.dirname(osp.abspath(LAUNCH_FNAME)))
-    cfg_name_2_maker = parse_launch_config(launch_config)
-    cfg_name_2_maker = {
+    # MUST chdir first: imports within cfg file might assume relpath from the cfg file itself.
+    launch_fname = args.file
+    launch_config = yaml_read(launch_fname)
+    os.chdir(osp.dirname(osp.abspath(launch_fname)))
+    nametuple_2_maker = parse_launch_config(launch_config)
+    cfgname_2_maker = {
         join_parts_into_path(k, args.nest_at): v
-        for k, v in cfg_name_2_maker.items()
+        for k, v in nametuple_2_maker.items()
     }
 
     os.chdir(LAUNCH_DIR_ABSPATH)
 
     # if mocking, print requested configs and quit
     if args.mock is not None:
-        to_display = args.mock if len(args.mock) > 0 else cfg_name_2_maker.keys()
+        to_display = args.mock if len(args.mock) > 0 else cfgname_2_maker.keys()
         for i, exp_name in enumerate(to_display):
-            maker = cfg_name_2_maker[exp_name]
+            maker = cfgname_2_maker[exp_name]
             cprint('{}: {}'.format(i, exp_name), color=_INFO_COLOR)
             print(_yaml_dump(maker.state))
         return
@@ -122,7 +125,7 @@ def main():
     os.chdir(RUN_DIR_NAME)
 
     sow_acc = []
-    for i, (exp_name, maker) in enumerate(cfg_name_2_maker.items()):
+    for i, (exp_name, maker) in enumerate(cfgname_2_maker.items()):
         cprint("sowing {}: {}".format(i, exp_name), color=_INFO_COLOR)
         _paths = plant_cfg(exp_name, maker.state, overwrite=args.overwrite, repeat=args.repeat)
         sow_acc.extend([osp.abspath(e) for e in _paths])
@@ -133,7 +136,7 @@ def main():
         f.write(pl)
 
 
-def parse_launch_config(launch_config):
+def parse_launch_config(launch_config) -> dict[tuple, Any]:
     validate_dict_fields(launch_config, _LAUNCH_FIELDS_SPEC)
 
     acc = {}
@@ -171,7 +174,7 @@ def parse_launch_config(launch_config):
                 maker=curr_maker.clone(), deposit=acc, grids=part['expand']
             )
         else:
-            acc[part_name] = curr_maker
+            acc[(part_name,)] = curr_maker
 
     return acc
 
@@ -205,39 +208,58 @@ def validate_dict_fields(src_dict, field_spec):
 
 def dfs_expand(level, namelist, maker, deposit, grids):
     if level == len(grids):
-        k = tuple(namelist)
-        deposit[k] = maker.clone()
+        deposit[tuple(namelist)] = maker.clone()
         return
 
     tier = grids[level]
 
     # tier can be either dict[list], or list[dict]!
+    # in yaml syntax, dict[list] is easier for human to write (see example below).
+    # on the other hand, list[dict] is easier for machines to auto-generate with a simple for-loop.
 
-    # tier: dict[list]
+    # tier: dict[list]; convert it to list[dict] for unified processing.
     if isinstance(tier, dict):
+        # - alias: [a, b, c]
+        #   opt1: [1, 2, 3]
+        #   opt2: [x,]
+        # the keys are (alias, opt1, opt2)
+        # we want to support broadcasting the singleton opt2 against other fields
         _keys = list(tier.keys())
         size = max(len(tier[k]) for k in _keys)
 
+        # broadcast config if of length 1. aliases are not broadcastable; must be fully-specified.
         for k in _keys:
-            # broadcast config if of length 1; alias is not broadcastable; must be full-size.
             if len(tier[k]) == 1 and k != 'alias':
                 tier[k] = tier[k] * size
-            assert len(tier[k]) == size
+            else:
+                assert len(tier[k]) == size
 
-        if 'alias' in tier:
-            alias = tier['alias']
-            _keys.remove('alias')
-        else:
-            alias = range(size)
+        # if 'alias' in tier:
+        #     alias = tier['alias']
+        #     _keys.remove('alias')
+        # else:  # if alias not provided, auto-gen with idx
+        #     alias = range(size)
 
-        accu = []
-        for inx, nickname in enumerate(alias):
-            _payload = {
+        # accu = []
+        # for inx, nickname in enumerate(alias):
+        #     _payload = {
+        #         k: tier[k][inx] for k in _keys
+        #     }
+        #     _payload['alias'] = nickname
+        #     accu.append(_payload)
+
+        # if alias not provided, auto-gen with idx
+        # WARN: this is in-place editing the dict; might have global effect.
+        # the version above is harder to read, but avoids in-place edit.
+        if 'alias' not in tier:
+            tier['alias'] = range(size)
+            _keys.append('alias')
+
+        accu = []  # transpose into list[dict]
+        for inx in range(size):
+            accu.append({
                 k: tier[k][inx] for k in _keys
-            }
-            _payload['alias'] = nickname
-            accu.append(_payload)
-
+            })
         tier = accu
 
     tier: list[dict]
@@ -249,16 +271,15 @@ def dfs_expand(level, namelist, maker, deposit, grids):
         else:
             assert factor.keys() == keys
 
-        nickname = factor['alias']
-        new_namelist = [*namelist, nickname]
+        new_namelist = [*namelist, factor['alias']]
         curr_maker = maker.clone()
         for k, v in factor.items():
             if k == 'alias':
-                # don't try to pop alias before here.
+                # don't try to pop alias here.
                 # all kinds of subtle mem-ref issues.
                 # 1) keys are modified in-place after pop().
                 # 2) yaml parser makes ref-linked subtree share a dict storage. multiple subtrees affected after pop().
-                #    yaml ref is hard to disable for auto-generated configs.
+                #    yaml ref-linking is hard to disable for auto-generated files.
                 continue
             curr_maker.execute_clause({k: v})
         dfs_expand(level + 1, new_namelist, curr_maker, deposit, grids)
