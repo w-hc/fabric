@@ -1,5 +1,5 @@
 import inspect
-from typing import get_origin, get_args
+import typing
 from types import FunctionType
 from functools import partial
 from pprint import pformat
@@ -12,67 +12,90 @@ def is_config_class(x):
     return isinstance(x, type) and issubclass(x, BaseConfig)
 
 
-def optionally_break_composite_dtype(dtype):
+def flatten_composite_dtype(dtype):
     '''
-    A[B] -> A, B
-    A    -> A, None
+    list[tuple[float]] -> [<class 'list'>, <class 'tuple'>, <class 'float'>]
+    float -> [<class 'float'>]
+    list  -> [<class 'list'>]
     '''
-    A = get_origin(dtype)
-    if A is None:  # not composite type
-        A, B = dtype, None
-    else:
-        B = get_args(dtype)[0]
-    return A, B
+    original_dtype = dtype
+    flattened = []
+    while True:
+        container_type = typing.get_origin(dtype)
+        if container_type is None:
+            flattened.append(dtype)
+            break
+        else:
+            flattened.append(container_type)
+            type_args = typing.get_args(dtype)
+            assert len(type_args) == 1, f"only 1 arg allowed in composite type; given {original_dtype}"
+            dtype = type_args[0]
+    return flattened
 
 
-def recursively_check_itr_dtype(itr, dtype_container, dtype_member):
-    assert isinstance(itr, dtype_container)
+def do_check_type_and_val(name, dtype, val):
+    flattened_dtypes = flatten_composite_dtype(dtype)
+    n = len(flattened_dtypes)
+    assert n > 0
 
-    if len(itr) == 0:
+    # -- check dtype --
+    flag_type_err = False
+    # the initial n-1 must be valid container types
+    for i in range(n-1):
+        if flattened_dtypes[i] not in ALLOWED_ITER_TYPES:
+            flag_type_err = True
+    # the last one must be valid atomic type
+    if flattened_dtypes[n-1] not in ALLOWED_ATOMIC_TYPES:
+        flag_type_err = True
+    if flag_type_err:
+        raise ValueError(
+            f"field '{name}' has bad dtype '{dtype}'. Correct dtype: container must be one of {ALLOWED_ITER_TYPES}, "
+            f"and innermost must be one of {ALLOWED_ATOMIC_TYPES}."
+        )
+
+    # -- now check val is consistent with dtype --
+    if val is None:
+        # allow None to pass
         return
-
-    if dtype_member is None:
-        dtype_member = type(itr[0])
-
-    A, B = optionally_break_composite_dtype(dtype_member)
-    if not (A in ALLOWED_ATOMIC_TYPES or A in ALLOWED_ITER_TYPES):
-        raise ValueError(f"iter member must be atomic or nested list/tuple; got {A.__name__}")
-
-    for elem in itr:
-        assert type(elem) is A, \
-            f"{dtype_container.__name__} member dtype is {A.__name__}; got {elem} of type {type(elem).__name__}"
-        if A in ALLOWED_ITER_TYPES:
-            recursively_check_itr_dtype(elem, A, B)
-
-    return
-
-
-def do_type_check(name, dtype, val):
-    # both args are assumed not None
-    # dtype might be list[int]
-    A, B = optionally_break_composite_dtype(dtype)
-    if A in ALLOWED_ATOMIC_TYPES:
-        assert type(val) is A, f"dtype mismatch on {name}: expect {A.__name__}, got {val}"
-    elif A in ALLOWED_ITER_TYPES:
-        recursively_check_itr_dtype(val, A, B)
     else:
-        raise ValueError(f"{name}: {val} of declared type {dtype} not allowed in config")
+        # use a try block to produce better error message
+        try:
+            recursively_check_val_consistency(flattened_dtypes, val)
+        except Exception:
+            raise ValueError(f"field '{name}' with type '{dtype}' inconsistent with val {val}")
 
 
-def check_declared_dtype_and_val(name, dtype, val):
+def recursively_check_val_consistency(flattened_dtypes: list, val):
+    if len(flattened_dtypes) == 1:
+        assert type(val) is flattened_dtypes[0]
+    else:
+        assert flattened_dtypes[0] in ALLOWED_ITER_TYPES and isinstance(val, flattened_dtypes[0])
+        for elem in val:
+            recursively_check_val_consistency(flattened_dtypes[1:], elem)
+
+
+def infer_and_check_dtype_and_val(name, dtype, val):
     # dtype and val might be None
     if dtype is None:
         if val is None:
-            raise ValueError(f"{name} has neither type ann nor default value")
+            raise ValueError(f"field '{name}' has neither type ann nor default value")
         else:
+            # -- infer dtype based on val --
             dtype = type(val)
+            # allows plain list/tuple without type annotation
+            if dtype in ALLOWED_ITER_TYPES:
+                assert len(val) > 0, f"field '{name}' is given an empty container '{val}' with no type annotation"
+                if type(val[0]) in ALLOWED_ATOMIC_TYPES:
+                    dtype = dtype[type(val[0])]  # e.g. list[int]
+            else:  # must be atomic
+                if dtype not in ALLOWED_ATOMIC_TYPES:
+                    raise ValueError(
+                        f"field '{name}' has val '{val}' without type annotation; type inference failed"
+                    )
 
     # now guaranteed to have a dtype; verify it against the val
 
-    if val is None:
-        return dtype
-
-    do_type_check(name, dtype, val)
+    do_check_type_and_val(name, dtype, val)
 
     return dtype
 
@@ -173,23 +196,24 @@ class BaseConfig(metaclass=TrackFieldsMeta):
 
         for k in decl_order:
             dtype = cls_anns.get(k, None)
-            cls_val = cls_dict.get(k, None)
+            val = cls_dict.get(k, None)
 
-            if k.startswith('_') or isinstance(cls_val, (FunctionType, classmethod, staticmethod)):
-                # WARN: not a sure-fire way to catch everything.
+            if k.startswith('_') or isinstance(val, (FunctionType, classmethod, staticmethod)):
+                # skip private attrs and methods
+                # won't catch lambdas or other callables; these should err out at type checking
                 # print(f"ignoring: {k}")
                 continue
 
-            if is_config_class(cls_val):
-                fields[k] = (type, cls_val)
+            if is_config_class(val):
+                fields[k] = (type, val)
                 continue
 
-            if isinstance(cls_val, ConfigArray):
-                fields[k] = (ConfigArray, cls_val)
+            if isinstance(val, ConfigArray):
+                fields[k] = (ConfigArray, val)
                 continue
 
-            dtype = check_declared_dtype_and_val(k, dtype, cls_val)
-            fields[k] = (dtype, cls_val)
+            dtype = infer_and_check_dtype_and_val(k, dtype, val)
+            fields[k] = (dtype, val)
 
         return fields
 
@@ -209,8 +233,13 @@ class BaseConfig(metaclass=TrackFieldsMeta):
                 res[k] = dtype.__name__
         return res
 
-    def __init__(self, user_supplied_cfg: dict = {}):
+    def __init__(self, user_supplied_cfg: dict = None):
+        # TODO: extra keys in user_supplied_cfg aren't treated as error; should be stricter.
         fields = self.find_fields()
+
+        if user_supplied_cfg is None:
+            # make a dict from scratch instead of using a mutable, persistant obj as default arg
+            user_supplied_cfg = {}
 
         instantiated_cfg = {}
         for k, (dtype, v) in fields.items():
@@ -242,7 +271,7 @@ class BaseConfig(metaclass=TrackFieldsMeta):
             if k in user_supplied_cfg:
                 new_v = user_supplied_cfg[k]
                 if new_v is not None:  # allow user providing None
-                    do_type_check(k, dtype, new_v)
+                    do_check_type_and_val(k, dtype, new_v)
                 v = new_v
 
             instantiated_cfg[k] = v
@@ -300,7 +329,7 @@ def extract_config_knobs_from_callable(obj):
                 _read_if_not_emptymarker(param.annotation), \
                 _read_if_not_emptymarker(param.default)
 
-            dtype = check_declared_dtype_and_val(name, dtype, default_val)
+            dtype = infer_and_check_dtype_and_val(name, dtype, default_val)
             config_knobs.append(
                 (name, dtype, default_val)
             )

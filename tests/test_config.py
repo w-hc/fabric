@@ -1,3 +1,9 @@
+'''
+the thimble config system solves the double declaration problem.
+configs are automatically extracted from func and constructor signatures.
+This makes each func / class more portable.
+'''
+
 from fabric.config import BaseConfig, mkcfg, oneof
 from pprint import pp
 import pytest
@@ -41,7 +47,7 @@ def test_basic_use_cases():
     x = Cfg(dict(a=4, b=-2.8))
     assert_dict_eq(x.as_dict(), dict(a=4, b=-2.8))
 
-    with expect_error(AssertionError, 'dtype mismatch'):
+    with expect_error(ValueError):
         x = Cfg(dict(a=1.1))
 
     x = Cfg(dict(a=None, b=9.0))
@@ -87,7 +93,7 @@ def test_list():
     x = Cfg(dict(a=[8, 4], b=None))
     assert_dict_eq(x.as_dict(), dict(a=[8, 4], b=None, c=None))
 
-    with expect_error(AssertionError, 'member dtype'):
+    with expect_error(ValueError):
         Cfg(dict(a=[8., 4], b=None))
 
     # nested list
@@ -188,7 +194,7 @@ class LLAMA2:
 
 
 class LLAMA2Config(BaseConfig):
-    model: LLAMA2
+    model = mkcfg(LLAMA2)
     some_other: int
     pass
 
@@ -208,6 +214,23 @@ class ModelConfig(BaseConfig):
 
     def test_func1(self):
         pass
+
+
+def test_bad_dtype_annotation():
+    # LLAMA2 is a plain class, not a BaseConfig subclass.
+    # must use mkcfg(LLAMA2) to wrap it as a config field.
+    with expect_error(ValueError, "bad dtype"):
+        class Cfg(BaseConfig):
+            model: LLAMA2
+
+        Cfg.schema()
+
+    # dict is not an allowed type (only bool, int, float, str and list/tuple containers)
+    with expect_error(ValueError, "bad dtype"):
+        class Cfg(BaseConfig):
+            x: dict
+
+        Cfg.schema()
 
 
 def test_overall():
